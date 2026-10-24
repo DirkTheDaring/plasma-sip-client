@@ -81,6 +81,11 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Build workspace binaries
+        env:
+          RUSTFLAGS: "-C link-arg=-fuse-ld=lld"
+        run: cargo build --workspace
+
       - name: Run workspace tests
         env:
           RUSTFLAGS: "-C link-arg=-fuse-ld=lld"
