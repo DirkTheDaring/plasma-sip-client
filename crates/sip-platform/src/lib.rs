@@ -59,26 +59,26 @@ impl PlatformNotifier {
     ) {
         let conn_clone = conn.clone();
         tokio::spawn(async move {
-            if let Ok(proxy) = FreedesktopNotificationsProxy::new(&conn_clone).await {
-                if let Ok(mut stream) = proxy.receive_action_invoked().await {
-                    while let Some(signal) = stream.next().await {
-                        if let Ok(args) = signal.args() {
-                            let notif_id = args.id;
-                            let action_key = args.action_key;
-                            let call_id = {
-                                let mut map = active_notifications.lock().await;
-                                map.remove(&notif_id)
+            if let Ok(proxy) = FreedesktopNotificationsProxy::new(&conn_clone).await
+                && let Ok(mut stream) = proxy.receive_action_invoked().await
+            {
+                while let Some(signal) = stream.next().await {
+                    if let Ok(args) = signal.args() {
+                        let notif_id = args.id;
+                        let action_key = args.action_key;
+                        let call_id = {
+                            let mut map = active_notifications.lock().await;
+                            map.remove(&notif_id)
+                        };
+                        if let Some(cid) = call_id {
+                            let act = match action_key {
+                                "answer" => Some(NotificationAction::Answer),
+                                "reject" => Some(NotificationAction::Reject),
+                                "default" | "open" => Some(NotificationAction::Open),
+                                _ => None,
                             };
-                            if let Some(cid) = call_id {
-                                let act = match action_key {
-                                    "answer" => Some(NotificationAction::Answer),
-                                    "reject" => Some(NotificationAction::Reject),
-                                    "default" | "open" => Some(NotificationAction::Open),
-                                    _ => None,
-                                };
-                                if let Some(a) = act {
-                                    let _ = action_tx.send((cid, a));
-                                }
+                            if let Some(a) = act {
+                                let _ = action_tx.send((cid, a));
                             }
                         }
                     }
@@ -206,10 +206,10 @@ impl PlatformNotifier {
             return Ok(());
         }
         self.active_notifications.lock().await.remove(&id);
-        if let Some(ref conn) = self.connection {
-            if let Ok(proxy) = FreedesktopNotificationsProxy::new(conn).await {
-                let _ = proxy.close_notification(id).await;
-            }
+        if let Some(ref conn) = self.connection
+            && let Ok(proxy) = FreedesktopNotificationsProxy::new(conn).await
+        {
+            let _ = proxy.close_notification(id).await;
         }
         Ok(())
     }
@@ -230,14 +230,12 @@ impl PlatformNotifier {
             }
         };
 
-        if let Some(id) = id_to_close {
-            if id != 0 {
-                if let Some(ref conn) = self.connection {
-                    if let Ok(proxy) = FreedesktopNotificationsProxy::new(conn).await {
-                        let _ = proxy.close_notification(id).await;
-                    }
-                }
-            }
+        if let Some(id) = id_to_close
+            && id != 0
+            && let Some(ref conn) = self.connection
+            && let Ok(proxy) = FreedesktopNotificationsProxy::new(conn).await
+        {
+            let _ = proxy.close_notification(id).await;
         }
         Ok(())
     }

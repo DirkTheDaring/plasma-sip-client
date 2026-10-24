@@ -81,12 +81,11 @@ impl SipUdpTransport {
         } else {
             "[::]:0"
         };
-        if let Ok(sock) = std::net::UdpSocket::bind(probe_bind) {
-            if sock.connect(target).is_ok() {
-                if let Ok(local) = sock.local_addr() {
-                    return local.ip();
-                }
-            }
+        if let Ok(sock) = std::net::UdpSocket::bind(probe_bind)
+            && sock.connect(target).is_ok()
+            && let Ok(local) = sock.local_addr()
+        {
+            return local.ip();
         }
         self.local_addr.ip()
     }

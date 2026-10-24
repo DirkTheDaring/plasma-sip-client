@@ -63,13 +63,12 @@ pub fn generate_ringtone_frames(
             ];
             let mut loaded = None;
             for p in ocean_paths {
-                if Path::new(p).exists() {
-                    if let Ok(samples) = load_audio_file(p) {
-                        if !samples.is_empty() {
-                            loaded = Some(samples);
-                            break;
-                        }
-                    }
+                if Path::new(p).exists()
+                    && let Ok(samples) = load_audio_file(p)
+                    && !samples.is_empty()
+                {
+                    loaded = Some(samples);
+                    break;
                 }
             }
             loaded.unwrap_or_else(|| {
@@ -119,15 +118,15 @@ pub fn load_audio_file(path: &str) -> Result<Vec<i16>, RingtoneLoadErrorKind> {
             "-v", "error", "-i", path, "-f", "s16le", "-ac", "1", "-ar", "8000", "pipe:1",
         ])
         .output()
+        && output.status.success()
+        && !output.stdout.is_empty()
     {
-        if output.status.success() && !output.stdout.is_empty() {
-            let mut samples = Vec::with_capacity(output.stdout.len() / 2);
-            for chunk in output.stdout.chunks_exact(2) {
-                samples.push(i16::from_le_bytes([chunk[0], chunk[1]]));
-            }
-            debug!(samples = samples.len(), "Decoded audio file using ffmpeg");
-            return Ok(samples);
+        let mut samples = Vec::with_capacity(output.stdout.len() / 2);
+        for chunk in output.stdout.as_chunks::<2>().0 {
+            samples.push(i16::from_le_bytes([chunk[0], chunk[1]]));
         }
+        debug!(samples = samples.len(), "Decoded audio file using ffmpeg");
+        return Ok(samples);
     }
 
     // Fallback: Native PCM WAV parser for .wav files
@@ -332,7 +331,7 @@ fn synth_classic_bell() -> Vec<i16> {
     let f2 = 840.0f32;
     let f_overtone = 1593.0f32;
 
-    for i in 0..ring_samples {
+    for (i, sample) in samples.iter_mut().enumerate().take(ring_samples) {
         let t = i as f32 / SAMPLE_RATE as f32;
 
         // 20 Hz warble modulation
@@ -340,7 +339,7 @@ fn synth_classic_bell() -> Vec<i16> {
 
         // Attack (15ms) and release (35ms) envelope
         let attack = (t / 0.015).min(1.0);
-        let release = ((1.0 - t) / 0.035).min(1.0).max(0.0);
+        let release = ((1.0 - t) / 0.035).clamp(0.0, 1.0);
         let env = attack * release;
 
         let wave = 0.45 * (2.0 * PI * f1 * t).sin()
@@ -348,7 +347,7 @@ fn synth_classic_bell() -> Vec<i16> {
             + 0.10 * (2.0 * PI * f_overtone * t).sin();
 
         let val = (wave * warble * env * 20000.0) as i16;
-        samples[i] = val;
+        *sample = val;
     }
 
     samples
@@ -400,15 +399,15 @@ fn synth_standard_tone() -> Vec<i16> {
     let tone_samples = (1.0 * SAMPLE_RATE as f32) as usize;
     let mut samples = vec![0i16; total_samples];
 
-    for i in 0..tone_samples {
+    for (i, sample_dst) in samples.iter_mut().enumerate().take(tone_samples) {
         let t = i as f32 / SAMPLE_RATE as f32;
 
         let attack = (t / 0.020).min(1.0);
-        let release = ((1.0 - t) / 0.020).min(1.0).max(0.0);
+        let release = ((1.0 - t) / 0.020).clamp(0.0, 1.0);
         let env = attack * release;
 
         let sample = (32767.0 * 0.4 * env * (2.0 * PI * 425.0 * t).sin()) as i16;
-        samples[i] = sample;
+        *sample_dst = sample;
     }
 
     samples

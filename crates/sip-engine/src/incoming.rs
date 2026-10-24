@@ -31,17 +31,17 @@ pub struct IncomingCallSession {
 }
 
 fn extract_callee_user(req: &SipRequest) -> &str {
-    if let Some(stripped) = req.ruri.strip_prefix("sip:") {
-        if let Some((user, _host)) = stripped.split_once('@') {
-            return user;
-        }
+    if let Some(stripped) = req.ruri.strip_prefix("sip:")
+        && let Some((user, _host)) = stripped.split_once('@')
+    {
+        return user;
     }
-    if let Some(to) = req.headers.get("To") {
-        if let Some(start) = to.find("sip:") {
-            let rest = &to[start + 4..];
-            if let Some((user, _)) = rest.split_once('@') {
-                return user;
-            }
+    if let Some(to) = req.headers.get("To")
+        && let Some(start) = to.find("sip:")
+    {
+        let rest = &to[start + 4..];
+        if let Some((user, _)) = rest.split_once('@') {
+            return user;
         }
     }
     "plasma-sip"

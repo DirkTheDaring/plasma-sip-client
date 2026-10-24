@@ -146,15 +146,16 @@ pub fn parse_srv_response(buf: &[u8], expected_tx_id: u16) -> Option<Vec<SrvReco
             let weight = u16::from_be_bytes([buf[offset + 2], buf[offset + 3]]);
             let port = u16::from_be_bytes([buf[offset + 4], buf[offset + 5]]);
 
-            if let Some((target, _)) = parse_dns_name(buf, offset + 6) {
-                if !target.is_empty() && target != "." {
-                    records.push(SrvRecord {
-                        priority,
-                        weight,
-                        port,
-                        target,
-                    });
-                }
+            if let Some((target, _)) = parse_dns_name(buf, offset + 6)
+                && !target.is_empty()
+                && target != "."
+            {
+                records.push(SrvRecord {
+                    priority,
+                    weight,
+                    port,
+                    target,
+                });
             }
         }
         offset += rdlength;
@@ -173,10 +174,10 @@ pub fn get_system_nameservers() -> Vec<SocketAddr> {
             if line.starts_with("nameserver") {
                 let mut parts = line.split_whitespace();
                 parts.next();
-                if let Some(ip_str) = parts.next() {
-                    if let Ok(ip) = ip_str.parse::<std::net::IpAddr>() {
-                        servers.push(SocketAddr::new(ip, 53));
-                    }
+                if let Some(ip_str) = parts.next()
+                    && let Ok(ip) = ip_str.parse::<std::net::IpAddr>()
+                {
+                    servers.push(SocketAddr::new(ip, 53));
                 }
             }
         }
@@ -216,20 +217,20 @@ pub async fn resolve_sip_srv(domain: &str) -> Option<(String, u16)> {
         let mut buf = vec![0u8; 512];
         let recv_fut = sock.recv_from(&mut buf);
 
-        if let Ok(Ok((len, _))) = tokio::time::timeout(Duration::from_millis(800), recv_fut).await {
-            if let Some(records) = parse_srv_response(&buf[..len], tx_id) {
-                if let Some(best) = records.into_iter().next() {
-                    debug!(
-                        port = best.port,
-                        priority = best.priority,
-                        "RFC 3263: Resolved DNS SRV record"
-                    );
-                    return Some((best.target, best.port));
-                } else {
-                    // Authoritative negative response (NXDOMAIN or NODATA): return early without querying backup servers
-                    trace!("RFC 3263: Authoritative negative response for DNS SRV");
-                    return None;
-                }
+        if let Ok(Ok((len, _))) = tokio::time::timeout(Duration::from_millis(800), recv_fut).await
+            && let Some(records) = parse_srv_response(&buf[..len], tx_id)
+        {
+            if let Some(best) = records.into_iter().next() {
+                debug!(
+                    port = best.port,
+                    priority = best.priority,
+                    "RFC 3263: Resolved DNS SRV record"
+                );
+                return Some((best.target, best.port));
+            } else {
+                // Authoritative negative response (NXDOMAIN or NODATA): return early without querying backup servers
+                trace!("RFC 3263: Authoritative negative response for DNS SRV");
+                return None;
             }
         }
     }
@@ -257,34 +258,32 @@ pub async fn resolve_sip_target(
     if let Ok(ip) = trimmed.parse::<std::net::IpAddr>() {
         return Ok(vec![SocketAddr::new(ip, default_port)]);
     }
-    if let Some(unbracketed) = trimmed.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
-        if let Ok(ip) = unbracketed.parse::<std::net::IpAddr>() {
-            return Ok(vec![SocketAddr::new(ip, default_port)]);
-        }
+    if let Some(unbracketed) = trimmed.strip_prefix('[').and_then(|s| s.strip_suffix(']'))
+        && let Ok(ip) = unbracketed.parse::<std::net::IpAddr>()
+    {
+        return Ok(vec![SocketAddr::new(ip, default_port)]);
     }
 
     // 2. Check if target has an explicit port (e.g. "sip.provider.com:5062" or "[2001:db8::1]:5062")
-    if let Some((host, port_str)) = trimmed.rsplit_once(':') {
-        if !host.contains(':') || (host.starts_with('[') && host.ends_with(']')) {
-            if let Ok(port) = port_str.parse::<u16>() {
-                let clean_host = host.trim_matches(['[', ']']);
-                return tokio::net::lookup_host((clean_host, port))
-                    .await
-                    .map(|iter| iter.collect())
-                    .map_err(|_| "DNS resolution error: host lookup failed".to_string());
-            }
-        }
+    if let Some((host, port_str)) = trimmed.rsplit_once(':')
+        && (!host.contains(':') || (host.starts_with('[') && host.ends_with(']')))
+        && let Ok(port) = port_str.parse::<u16>()
+    {
+        let clean_host = host.trim_matches(['[', ']']);
+        return tokio::net::lookup_host((clean_host, port))
+            .await
+            .map(|iter| iter.collect())
+            .map_err(|_| "DNS resolution error: host lookup failed".to_string());
     }
 
     // 3. Domain name with default port 5060: query RFC 3263 SRV _sip._udp.<domain>
-    if default_port == 5060 {
-        if let Some((srv_host, srv_port)) = resolve_sip_srv(trimmed).await {
-            if let Ok(addrs) = tokio::net::lookup_host((srv_host.as_str(), srv_port)).await {
-                let list: Vec<SocketAddr> = addrs.collect();
-                if !list.is_empty() {
-                    return Ok(list);
-                }
-            }
+    if default_port == 5060
+        && let Some((srv_host, srv_port)) = resolve_sip_srv(trimmed).await
+        && let Ok(addrs) = tokio::net::lookup_host((srv_host.as_str(), srv_port)).await
+    {
+        let list: Vec<SocketAddr> = addrs.collect();
+        if !list.is_empty() {
+            return Ok(list);
         }
     }
 

@@ -39,10 +39,10 @@ async fn test_generic_sip_pbx_interoperability_full_cycle() {
     let _rx_handle = tokio::spawn(async move {
         let mut buf = [0u8; 65535];
         while let Ok((len, _)) = rx_transport.recv_from(&mut buf).await {
-            if let Ok(text) = std::str::from_utf8(&buf[..len]) {
-                if let Ok(SipMessage::Response(res)) = SipMessage::parse(text) {
-                    rx_txs.handle_response(res).await;
-                }
+            if let Ok(text) = std::str::from_utf8(&buf[..len])
+                && let Ok(SipMessage::Response(res)) = SipMessage::parse(text)
+            {
+                rx_txs.handle_response(res).await;
             }
         }
     });

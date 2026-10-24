@@ -159,11 +159,11 @@ impl AsteriskGuard {
                 .arg("core show version")
                 .output();
 
-            if let Ok(out) = output {
-                if out.status.success() {
-                    ready = true;
-                    break;
-                }
+            if let Ok(out) = output
+                && out.status.success()
+            {
+                ready = true;
+                break;
             }
         }
 
@@ -241,16 +241,16 @@ async fn test_asterisk_real_pbx_interoperability_full_suite() {
     let _rx_task = tokio::spawn(async move {
         let mut buf = [0u8; 65535];
         while let Ok((len, from)) = rx_transport.recv_from(&mut buf).await {
-            if let Ok(text) = std::str::from_utf8(&buf[..len]) {
-                if let Ok(msg) = SipMessage::parse(text) {
-                    match msg {
-                        SipMessage::Response(res) => {
-                            rx_txs.handle_response(res).await;
-                        }
-                        SipMessage::Request(req) => {
-                            if req.method == SipMethod::Invite {
-                                incoming_invites_clone.lock().await.push((req, from));
-                            }
+            if let Ok(text) = std::str::from_utf8(&buf[..len])
+                && let Ok(msg) = SipMessage::parse(text)
+            {
+                match msg {
+                    SipMessage::Response(res) => {
+                        rx_txs.handle_response(res).await;
+                    }
+                    SipMessage::Request(req) => {
+                        if req.method == SipMethod::Invite {
+                            incoming_invites_clone.lock().await.push((req, from));
                         }
                     }
                 }

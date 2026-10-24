@@ -172,12 +172,11 @@ async fn test_successful_outgoing_call_and_hangup() {
     tokio::spawn(async move {
         let mut buf = [0u8; 4096];
         loop {
-            if let Ok((len, _)) = trans_net.recv_from(&mut buf).await {
-                if let Ok(text) = std::str::from_utf8(&buf[..len]) {
-                    if let Ok(SipMessage::Response(res)) = SipMessage::parse(text) {
-                        trans_clone.handle_response(res).await;
-                    }
-                }
+            if let Ok((len, _)) = trans_net.recv_from(&mut buf).await
+                && let Ok(text) = std::str::from_utf8(&buf[..len])
+                && let Ok(SipMessage::Response(res)) = SipMessage::parse(text)
+            {
+                trans_clone.handle_response(res).await;
             }
         }
     });
@@ -227,12 +226,11 @@ async fn test_outgoing_call_busy() {
     tokio::spawn(async move {
         let mut buf = [0u8; 4096];
         loop {
-            if let Ok((len, _)) = trans_net.recv_from(&mut buf).await {
-                if let Ok(text) = std::str::from_utf8(&buf[..len]) {
-                    if let Ok(SipMessage::Response(res)) = SipMessage::parse(text) {
-                        trans_clone.handle_response(res).await;
-                    }
-                }
+            if let Ok((len, _)) = trans_net.recv_from(&mut buf).await
+                && let Ok(text) = std::str::from_utf8(&buf[..len])
+                && let Ok(SipMessage::Response(res)) = SipMessage::parse(text)
+            {
+                trans_clone.handle_response(res).await;
             }
         }
     });
@@ -275,12 +273,11 @@ async fn test_outgoing_call_rejected() {
     tokio::spawn(async move {
         let mut buf = [0u8; 4096];
         loop {
-            if let Ok((len, _)) = trans_net.recv_from(&mut buf).await {
-                if let Ok(text) = std::str::from_utf8(&buf[..len]) {
-                    if let Ok(SipMessage::Response(res)) = SipMessage::parse(text) {
-                        trans_clone.handle_response(res).await;
-                    }
-                }
+            if let Ok((len, _)) = trans_net.recv_from(&mut buf).await
+                && let Ok(text) = std::str::from_utf8(&buf[..len])
+                && let Ok(SipMessage::Response(res)) = SipMessage::parse(text)
+            {
+                trans_clone.handle_response(res).await;
             }
         }
     });
@@ -323,12 +320,11 @@ async fn test_outgoing_call_cancel() {
     tokio::spawn(async move {
         let mut buf = [0u8; 4096];
         loop {
-            if let Ok((len, _)) = trans_net.recv_from(&mut buf).await {
-                if let Ok(text) = std::str::from_utf8(&buf[..len]) {
-                    if let Ok(SipMessage::Response(res)) = SipMessage::parse(text) {
-                        trans_clone.handle_response(res).await;
-                    }
-                }
+            if let Ok((len, _)) = trans_net.recv_from(&mut buf).await
+                && let Ok(text) = std::str::from_utf8(&buf[..len])
+                && let Ok(SipMessage::Response(res)) = SipMessage::parse(text)
+            {
+                trans_clone.handle_response(res).await;
             }
         }
     });

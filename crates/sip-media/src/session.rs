@@ -333,14 +333,13 @@ impl MediaSession {
                                     }
 
                                     // Handle DTMF or Audio
-                                    if let Some(dtmf_pt) = dtmf_payload_type {
-                                        if packet.payload_type == dtmf_pt {
+                                    if let Some(dtmf_pt) = dtmf_payload_type
+                                        && packet.payload_type == dtmf_pt {
                                             if let Ok(event) = DtmfEvent::parse(&packet.payload) {
                                                 let _ = dtmf_rx_tx.send(event).await;
                                             }
                                             continue;
                                         }
-                                    }
 
                                     if packet.payload_type == codec_payload_type {
                                         let mut jb_guard = jb.lock().await;
@@ -387,15 +386,14 @@ impl MediaSession {
                             let target = *dest_addr_send.read().await;
 
                             // Check if a new DTMF digit should be triggered
-                            if active_dtmf.is_none() {
-                                if let Ok(digit) = dtmf_in_rx.try_recv() {
+                            if active_dtmf.is_none()
+                                && let Ok(digit) = dtmf_in_rx.try_recv() {
                                     active_dtmf = Some((digit, 160, 0));
                                 }
-                            }
 
                             // 1. Send DTMF if active
-                            if let Some((digit, ref mut dur, ref mut end_count)) = active_dtmf {
-                                if let Some(dtmf_pt) = dtmf_payload_type {
+                            if let Some((digit, ref mut dur, ref mut end_count)) = active_dtmf
+                                && let Some(dtmf_pt) = dtmf_payload_type {
                                     let is_end = *dur >= 800; // 100ms tone duration = 800 units
                                     if let Ok(event) = DtmfEvent::from_char(digit, is_end, *dur) {
                                         let raw_event = event.serialize();
@@ -421,7 +419,6 @@ impl MediaSession {
                                     }
                                     continue;
                                 }
-                            }
 
                             // 2. Otherwise send normal 20ms audio frame
                             // Read 160 PCM samples from queue or use silence

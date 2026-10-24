@@ -149,12 +149,11 @@ async fn test_successful_challenge_registration() {
     tokio::spawn(async move {
         let mut buf = [0u8; 4096];
         loop {
-            if let Ok((len, _)) = transport_clone.recv_from(&mut buf).await {
-                if let Ok(text) = std::str::from_utf8(&buf[..len]) {
-                    if let Ok(SipMessage::Response(res)) = SipMessage::parse(text) {
-                        trans_clone.handle_response(res).await;
-                    }
-                }
+            if let Ok((len, _)) = transport_clone.recv_from(&mut buf).await
+                && let Ok(text) = std::str::from_utf8(&buf[..len])
+                && let Ok(SipMessage::Response(res)) = SipMessage::parse(text)
+            {
+                trans_clone.handle_response(res).await;
             }
         }
     });
@@ -188,12 +187,11 @@ async fn test_registration_wrong_password() {
     tokio::spawn(async move {
         let mut buf = [0u8; 4096];
         loop {
-            if let Ok((len, _)) = transport_clone.recv_from(&mut buf).await {
-                if let Ok(text) = std::str::from_utf8(&buf[..len]) {
-                    if let Ok(SipMessage::Response(res)) = SipMessage::parse(text) {
-                        trans_clone.handle_response(res).await;
-                    }
-                }
+            if let Ok((len, _)) = transport_clone.recv_from(&mut buf).await
+                && let Ok(text) = std::str::from_utf8(&buf[..len])
+                && let Ok(SipMessage::Response(res)) = SipMessage::parse(text)
+            {
+                trans_clone.handle_response(res).await;
             }
         }
     });
@@ -227,12 +225,11 @@ async fn test_successful_unregister() {
     tokio::spawn(async move {
         let mut buf = [0u8; 4096];
         loop {
-            if let Ok((len, _)) = transport_clone.recv_from(&mut buf).await {
-                if let Ok(text) = std::str::from_utf8(&buf[..len]) {
-                    if let Ok(SipMessage::Response(res)) = SipMessage::parse(text) {
-                        trans_clone.handle_response(res).await;
-                    }
-                }
+            if let Ok((len, _)) = transport_clone.recv_from(&mut buf).await
+                && let Ok(text) = std::str::from_utf8(&buf[..len])
+                && let Ok(SipMessage::Response(res)) = SipMessage::parse(text)
+            {
+                trans_clone.handle_response(res).await;
             }
         }
     });

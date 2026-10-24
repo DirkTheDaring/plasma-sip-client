@@ -124,12 +124,11 @@ async fn test_synthetic_bidirectional_audio_loopback() {
         tokio::select! {
             _ = &mut dtmf_timeout => break,
             event = dtmf_rx_b.recv() => {
-                if let Some(e) = event {
-                    if e.event_id == 9 {
+                if let Some(e) = event
+                    && e.event_id == 9 {
                         received_dtmf = true;
                         break;
                     }
-                }
             }
         }
     }

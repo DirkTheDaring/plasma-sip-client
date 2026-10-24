@@ -158,16 +158,16 @@ async fn test_r4_incoming_call_signaling_and_provisional_responses() {
         .expect("receive response timeout")
         .unwrap();
         let text = std::str::from_utf8(&buf[..len]).unwrap();
-        if let Ok(SipMessage::Response(res)) = SipMessage::parse(text) {
-            if res.status_code == 180 {
-                received_180 = true;
-                assert_eq!(res.reason_phrase, "Ringing");
-                assert_eq!(res.call_id(), Some(sip_call_id.as_str()));
-                if let Some(to) = res.headers.get("To") {
-                    if let Some((_, tag)) = to.split_once(";tag=") {
-                        to_tag_received = Some(tag.to_string());
-                    }
-                }
+        if let Ok(SipMessage::Response(res)) = SipMessage::parse(text)
+            && res.status_code == 180
+        {
+            received_180 = true;
+            assert_eq!(res.reason_phrase, "Ringing");
+            assert_eq!(res.call_id(), Some(sip_call_id.as_str()));
+            if let Some(to) = res.headers.get("To")
+                && let Some((_, tag)) = to.split_once(";tag=")
+            {
+                to_tag_received = Some(tag.to_string());
             }
         }
     }
@@ -269,14 +269,12 @@ async fn test_r4_incoming_call_answer_and_bidirectional_audio() {
     for _ in 0..2 {
         let (len, _) = caller_sip_socket.recv_from(&mut buf).await.unwrap();
         let text = std::str::from_utf8(&buf[..len]).unwrap();
-        if let Ok(SipMessage::Response(res)) = SipMessage::parse(text) {
-            if res.status_code == 180 {
-                if let Some(t) = res.headers.get("To") {
-                    if let Some((_, tag)) = t.split_once(";tag=") {
-                        to_tag = Some(tag.to_string());
-                    }
-                }
-            }
+        if let Ok(SipMessage::Response(res)) = SipMessage::parse(text)
+            && res.status_code == 180
+            && let Some(t) = res.headers.get("To")
+            && let Some((_, tag)) = t.split_once(";tag=")
+        {
+            to_tag = Some(tag.to_string());
         }
     }
     let to_tag = to_tag.expect("received to_tag");
@@ -370,16 +368,14 @@ async fn test_r4_incoming_call_answer_and_bidirectional_audio() {
         tokio::select! {
             _ = &mut rtp_timeout => break,
             recv_res = caller_rtp_socket.recv_from(&mut rtp_buf) => {
-                if let Ok((len, _)) = recv_res {
-                    if let Ok(pkt) = RtpPacket::parse(&rtp_buf[..len]) {
-                        if pkt.payload_type == 8 {
+                if let Ok((len, _)) = recv_res
+                    && let Ok(pkt) = RtpPacket::parse(&rtp_buf[..len])
+                        && pkt.payload_type == 8 {
                             packets_from_daemon += 1;
                             if packets_from_daemon >= 3 {
                                 break;
                             }
                         }
-                    }
-                }
             }
         }
     }
@@ -446,10 +442,10 @@ async fn test_r4_incoming_call_answer_and_bidirectional_audio() {
     loop {
         if let Ok(Ok((id, state))) =
             tokio::time::timeout(Duration::from_millis(300), state_rx.recv()).await
+            && id == call_id
+            && matches!(state, CallState::Terminated { .. })
         {
-            if id == call_id && matches!(state, CallState::Terminated { .. }) {
-                break;
-            }
+            break;
         }
     }
 
@@ -532,13 +528,13 @@ async fn test_r4_incoming_call_reject() {
         .await
         {
             let text = std::str::from_utf8(&buf[..len]).unwrap();
-            if let Ok(SipMessage::Response(res)) = SipMessage::parse(text) {
-                if res.status_code == 603 {
-                    received_603 = true;
-                    assert_eq!(res.reason_phrase, "Decline");
-                    assert_eq!(res.call_id(), Some(sip_call_id.as_str()));
-                    break;
-                }
+            if let Ok(SipMessage::Response(res)) = SipMessage::parse(text)
+                && res.status_code == 603
+            {
+                received_603 = true;
+                assert_eq!(res.reason_phrase, "Decline");
+                assert_eq!(res.call_id(), Some(sip_call_id.as_str()));
+                break;
             }
         }
     }
@@ -548,17 +544,15 @@ async fn test_r4_incoming_call_reject() {
     loop {
         if let Ok(Ok((id, state))) =
             tokio::time::timeout(Duration::from_millis(300), state_rx.recv()).await
+            && id == call_id
+            && matches!(
+                state,
+                CallState::Terminated {
+                    reason: DisconnectReason::Rejected
+                }
+            )
         {
-            if id == call_id
-                && matches!(
-                    state,
-                    CallState::Terminated {
-                        reason: DisconnectReason::Rejected
-                    }
-                )
-            {
-                break;
-            }
+            break;
         }
     }
 
@@ -685,17 +679,15 @@ async fn test_r4_incoming_call_cancel_before_answer() {
     loop {
         if let Ok(Ok((id, state))) =
             tokio::time::timeout(Duration::from_millis(300), state_rx.recv()).await
+            && id == call_id
+            && matches!(
+                state,
+                CallState::Terminated {
+                    reason: DisconnectReason::Cancelled
+                }
+            )
         {
-            if id == call_id
-                && matches!(
-                    state,
-                    CallState::Terminated {
-                        reason: DisconnectReason::Cancelled
-                    }
-                )
-            {
-                break;
-            }
+            break;
         }
     }
 
@@ -904,12 +896,12 @@ async fn test_r4_notification_action_triggers_answer() {
         .await
         {
             let text = std::str::from_utf8(&buf[..len]).unwrap();
-            if let Ok(SipMessage::Response(res)) = SipMessage::parse(text) {
-                if res.status_code == 200 {
-                    received_200 = true;
-                    assert_eq!(res.reason_phrase, "OK");
-                    break;
-                }
+            if let Ok(SipMessage::Response(res)) = SipMessage::parse(text)
+                && res.status_code == 200
+            {
+                received_200 = true;
+                assert_eq!(res.reason_phrase, "OK");
+                break;
             }
         }
     }
@@ -922,10 +914,10 @@ async fn test_r4_notification_action_triggers_answer() {
     loop {
         if let Ok(Ok((id, state))) =
             tokio::time::timeout(Duration::from_millis(300), state_rx.recv()).await
+            && id == call_id
+            && matches!(state, CallState::Active { .. })
         {
-            if id == call_id && matches!(state, CallState::Active { .. }) {
-                break;
-            }
+            break;
         }
     }
 
@@ -1000,11 +992,11 @@ async fn test_r4_repeated_incoming_calls_cleanup_no_leaks() {
             .await
             {
                 let text = std::str::from_utf8(&buf[..len]).unwrap();
-                if let Ok(SipMessage::Response(res)) = SipMessage::parse(text) {
-                    if res.status_code == 200 {
-                        received_200 = true;
-                        break;
-                    }
+                if let Ok(SipMessage::Response(res)) = SipMessage::parse(text)
+                    && res.status_code == 200
+                {
+                    received_200 = true;
+                    break;
                 }
             }
         }
@@ -1017,10 +1009,10 @@ async fn test_r4_repeated_incoming_calls_cleanup_no_leaks() {
         loop {
             if let Ok(Ok((id, state))) =
                 tokio::time::timeout(Duration::from_millis(300), state_rx.recv()).await
+                && id == call_id
+                && matches!(state, CallState::Terminated { .. })
             {
-                if id == call_id && matches!(state, CallState::Terminated { .. }) {
-                    break;
-                }
+                break;
             }
         }
 
@@ -1134,14 +1126,12 @@ async fn test_r4_in_dialog_reinvite_hold_and_resume() {
         .expect("timeout receiving provisional")
         .unwrap();
         let text = std::str::from_utf8(&buf[..len]).unwrap();
-        if let Ok(SipMessage::Response(res)) = SipMessage::parse(text) {
-            if res.status_code == 180 {
-                if let Some(t) = res.headers.get("To") {
-                    if let Some((_, tag)) = t.split_once(";tag=") {
-                        to_tag = tag.to_string();
-                    }
-                }
-            }
+        if let Ok(SipMessage::Response(res)) = SipMessage::parse(text)
+            && res.status_code == 180
+            && let Some(t) = res.headers.get("To")
+            && let Some((_, tag)) = t.split_once(";tag=")
+        {
+            to_tag = tag.to_string();
         }
     }
     assert!(!to_tag.is_empty(), "Must receive To tag from 180 Ringing");
@@ -1192,10 +1182,10 @@ async fn test_r4_in_dialog_reinvite_hold_and_resume() {
     loop {
         if let Ok(Ok((id, state))) =
             tokio::time::timeout(Duration::from_millis(500), state_rx.recv()).await
+            && id == call_id
+            && matches!(state, CallState::Active { .. })
         {
-            if id == call_id && matches!(state, CallState::Active { .. }) {
-                break;
-            }
+            break;
         }
     }
 
@@ -1255,10 +1245,10 @@ async fn test_r4_in_dialog_reinvite_hold_and_resume() {
     loop {
         if let Ok(Ok((id, state))) =
             tokio::time::timeout(Duration::from_millis(500), state_rx.recv()).await
+            && id == call_id
+            && matches!(state, CallState::Held)
         {
-            if id == call_id && matches!(state, CallState::Held) {
-                break;
-            }
+            break;
         }
     }
     assert_eq!(
@@ -1347,10 +1337,10 @@ async fn test_r4_in_dialog_reinvite_hold_and_resume() {
     loop {
         if let Ok(Ok((id, state))) =
             tokio::time::timeout(Duration::from_millis(500), state_rx.recv()).await
+            && id == call_id
+            && matches!(state, CallState::Active { .. })
         {
-            if id == call_id && matches!(state, CallState::Active { .. }) {
-                break;
-            }
+            break;
         }
     }
     assert!(matches!(
@@ -1432,12 +1422,12 @@ async fn test_r4_incoming_call_configurable_reject_modes() {
         .await
         {
             let text = std::str::from_utf8(&buf[..len]).unwrap();
-            if let Ok(SipMessage::Response(res)) = SipMessage::parse(text) {
-                if res.status_code == 486 {
-                    received_486 = true;
-                    assert_eq!(res.reason_phrase, "Busy Here");
-                    break;
-                }
+            if let Ok(SipMessage::Response(res)) = SipMessage::parse(text)
+                && res.status_code == 486
+            {
+                received_486 = true;
+                assert_eq!(res.reason_phrase, "Busy Here");
+                break;
             }
         }
     }
@@ -1490,12 +1480,12 @@ async fn test_r4_incoming_call_configurable_reject_modes() {
         .await
         {
             let text = std::str::from_utf8(&buf[..len]).unwrap();
-            if let Ok(SipMessage::Response(res)) = SipMessage::parse(text) {
-                if res.status_code == 600 {
-                    received_600 = true;
-                    assert_eq!(res.reason_phrase, "Busy Everywhere");
-                    break;
-                }
+            if let Ok(SipMessage::Response(res)) = SipMessage::parse(text)
+                && res.status_code == 600
+            {
+                received_600 = true;
+                assert_eq!(res.reason_phrase, "Busy Everywhere");
+                break;
             }
         }
     }
@@ -1551,11 +1541,11 @@ async fn test_r4_incoming_call_configurable_reject_modes() {
         .await
         {
             let text = std::str::from_utf8(&buf[..len]).unwrap();
-            if let Ok(SipMessage::Response(res)) = SipMessage::parse(text) {
-                if res.status_code == 200 {
-                    received_200 = true;
-                    break;
-                }
+            if let Ok(SipMessage::Response(res)) = SipMessage::parse(text)
+                && res.status_code == 200
+            {
+                received_200 = true;
+                break;
             }
         }
     }
@@ -1574,11 +1564,11 @@ async fn test_r4_incoming_call_configurable_reject_modes() {
         .await
         {
             let text = std::str::from_utf8(&buf[..len]).unwrap();
-            if let Ok(SipMessage::Request(req)) = SipMessage::parse(text) {
-                if req.method == SipMethod::Bye {
-                    received_bye = true;
-                    break;
-                }
+            if let Ok(SipMessage::Request(req)) = SipMessage::parse(text)
+                && req.method == SipMethod::Bye
+            {
+                received_bye = true;
+                break;
             }
         }
     }

@@ -476,18 +476,17 @@ impl AccountManager {
 
         if let Ok(addrs) =
             sip_transport::resolve_sip_target(&account.registrar, account.registrar_port).await
+            && let Some(registrar_addr) = self.transport.select_compatible_addr(addrs)
         {
-            if let Some(registrar_addr) = self.transport.select_compatible_addr(addrs) {
-                let reg_mgr = reg_mgr_opt.unwrap_or_else(|| {
-                    Arc::new(RegistrationManager::new(
-                        account,
-                        password,
-                        self.transport.clone(),
-                        self.transactions.clone(),
-                    ))
-                });
-                let _ = reg_mgr.unregister(registrar_addr).await;
-            }
+            let reg_mgr = reg_mgr_opt.unwrap_or_else(|| {
+                Arc::new(RegistrationManager::new(
+                    account,
+                    password,
+                    self.transport.clone(),
+                    self.transactions.clone(),
+                ))
+            });
+            let _ = reg_mgr.unregister(registrar_addr).await;
         }
 
         self.set_registration_state(id, RegistrationState::Unregistered)

@@ -303,76 +303,68 @@ impl CallManager {
 
                         {
                             let mut active = active_call_clone.lock().await;
-                            if let Some(ref mut call) = *active {
-                                if call.id == call_id {
-                                    let effective_state = match new_state {
-                                        CallState::Active { started_at } => {
-                                            let actual_start =
-                                                call.connected_at.unwrap_or(started_at);
-                                            CallState::Active {
-                                                started_at: actual_start,
-                                            }
+                            if let Some(ref mut call) = *active
+                                && call.id == call_id
+                            {
+                                let effective_state = match new_state {
+                                    CallState::Active { started_at } => {
+                                        let actual_start = call.connected_at.unwrap_or(started_at);
+                                        CallState::Active {
+                                            started_at: actual_start,
                                         }
-                                        s => s,
-                                    };
-                                    call.state = effective_state.clone();
-                                    broadcast_state = effective_state;
-
-                                    if let CallState::Active { started_at } = call.state {
-                                        if call.connected_at.is_none() {
-                                            call.connected_at = Some(started_at);
-
-                                            // Connect real-time audio pipeline
-                                            let audio_cfg = storage_clone
-                                                .get_audio_config()
-                                                .unwrap_or_default();
-                                            let in_dev = audio_cfg.input_device_id.as_deref();
-                                            let out_dev = audio_cfg.output_device_id.as_deref();
-
-                                            let (pcm_rx, _dtmf_rx) =
-                                                session_for_audio.take_audio_channels().await;
-                                            let mut engine = audio_engine_clone.lock().await;
-                                            if let Some(rx) = pcm_rx {
-                                                let _ = engine.start_output(out_dev, rx);
-                                            }
-                                            let (mic_tx, mut mic_rx) =
-                                                tokio::sync::mpsc::channel(32);
-                                            if engine.start_input(in_dev, mic_tx).is_ok() {
-                                                let sess = session_for_audio.clone();
-                                                tokio::spawn(async move {
-                                                    while let Some(frame) = mic_rx.recv().await {
-                                                        if sess
-                                                            .send_audio_frame(frame)
-                                                            .await
-                                                            .is_err()
-                                                        {
-                                                            break;
-                                                        }
-                                                    }
-                                                });
-                                            }
-                                        }
-                                    } else if let CallState::Terminated { ref reason } = call.state
-                                    {
-                                        call_ended = true;
-                                        let duration_secs = call
-                                            .connected_at
-                                            .map(|c| (Utc::now() - c).num_seconds().max(0) as u32)
-                                            .unwrap_or(0);
-
-                                        // Stop audio streams on call termination
-                                        audio_engine_clone.lock().await.stop();
-
-                                        entry_to_log = Some(CallLogEntry {
-                                            id: call.id,
-                                            account_id: call.account_id,
-                                            direction: call.direction,
-                                            remote_party: call.remote_party.clone(),
-                                            started_at: call.created_at,
-                                            duration_seconds: duration_secs,
-                                            disconnect_reason: reason.to_string(),
-                                        });
                                     }
+                                    s => s,
+                                };
+                                call.state = effective_state.clone();
+                                broadcast_state = effective_state;
+
+                                if let CallState::Active { started_at } = call.state {
+                                    if call.connected_at.is_none() {
+                                        call.connected_at = Some(started_at);
+
+                                        // Connect real-time audio pipeline
+                                        let audio_cfg =
+                                            storage_clone.get_audio_config().unwrap_or_default();
+                                        let in_dev = audio_cfg.input_device_id.as_deref();
+                                        let out_dev = audio_cfg.output_device_id.as_deref();
+
+                                        let (pcm_rx, _dtmf_rx) =
+                                            session_for_audio.take_audio_channels().await;
+                                        let mut engine = audio_engine_clone.lock().await;
+                                        if let Some(rx) = pcm_rx {
+                                            let _ = engine.start_output(out_dev, rx);
+                                        }
+                                        let (mic_tx, mut mic_rx) = tokio::sync::mpsc::channel(32);
+                                        if engine.start_input(in_dev, mic_tx).is_ok() {
+                                            let sess = session_for_audio.clone();
+                                            tokio::spawn(async move {
+                                                while let Some(frame) = mic_rx.recv().await {
+                                                    if sess.send_audio_frame(frame).await.is_err() {
+                                                        break;
+                                                    }
+                                                }
+                                            });
+                                        }
+                                    }
+                                } else if let CallState::Terminated { ref reason } = call.state {
+                                    call_ended = true;
+                                    let duration_secs = call
+                                        .connected_at
+                                        .map(|c| (Utc::now() - c).num_seconds().max(0) as u32)
+                                        .unwrap_or(0);
+
+                                    // Stop audio streams on call termination
+                                    audio_engine_clone.lock().await.stop();
+
+                                    entry_to_log = Some(CallLogEntry {
+                                        id: call.id,
+                                        account_id: call.account_id,
+                                        direction: call.direction,
+                                        remote_party: call.remote_party.clone(),
+                                        started_at: call.created_at,
+                                        duration_seconds: duration_secs,
+                                        disconnect_reason: reason.to_string(),
+                                    });
                                 }
                             }
 
@@ -431,20 +423,20 @@ impl CallManager {
                 let mut entry_to_log = None;
                 {
                     let mut active = active_call_fail.lock().await;
-                    if let Some(ref call) = *active {
-                        if call.id == call_id && !matches!(call.state, CallState::Terminated { .. })
-                        {
-                            entry_to_log = Some(CallLogEntry {
-                                id: call.id,
-                                account_id: call.account_id,
-                                direction: call.direction,
-                                remote_party: call.remote_party.clone(),
-                                started_at: call.created_at,
-                                duration_seconds: 0,
-                                disconnect_reason: format!("Failed or timed out: {}", e),
-                            });
-                            *active = None;
-                        }
+                    if let Some(ref call) = *active
+                        && call.id == call_id
+                        && !matches!(call.state, CallState::Terminated { .. })
+                    {
+                        entry_to_log = Some(CallLogEntry {
+                            id: call.id,
+                            account_id: call.account_id,
+                            direction: call.direction,
+                            remote_party: call.remote_party.clone(),
+                            started_at: call.created_at,
+                            duration_seconds: 0,
+                            disconnect_reason: format!("Failed or timed out: {}", e),
+                        });
+                        *active = None;
                     }
                 }
                 if let Some(entry) = entry_to_log {
@@ -541,10 +533,10 @@ impl CallManager {
         session.hold().await?;
 
         let mut call_guard = self.active_call.lock().await;
-        if let Some(ref mut c) = *call_guard {
-            if c.id == call_id {
-                c.state = CallState::Held;
-            }
+        if let Some(ref mut c) = *call_guard
+            && c.id == call_id
+        {
+            c.state = CallState::Held;
         }
         let _ = self.state_tx.send((call_id, CallState::Held));
         info!(call_id = %call_id, "Call transitioned to Held state");
@@ -596,12 +588,12 @@ impl CallManager {
                     }
                 }
                 ActiveSession::Incoming(ref s) => {
-                    if let Some(call_id_hdr) = req.call_id() {
-                        if s.sip_call_id == call_id_hdr {
-                            let _ = s.handle_bye(&req).await;
-                            self.audio_engine.lock().await.stop();
-                            return true;
-                        }
+                    if let Some(call_id_hdr) = req.call_id()
+                        && s.sip_call_id == call_id_hdr
+                    {
+                        let _ = s.handle_bye(&req).await;
+                        self.audio_engine.lock().await.stop();
+                        return true;
                     }
                 }
             }
@@ -629,11 +621,11 @@ impl CallManager {
         // 1. Check if this is an in-dialog re-INVITE for the current active call
         {
             let session_opt = self.active_session.lock().await.clone();
-            if let Some(session) = session_opt {
-                if session.handle_reinvite(&req, src).await {
-                    info!("Handled in-dialog re-INVITE successfully");
-                    return true;
-                }
+            if let Some(session) = session_opt
+                && session.handle_reinvite(&req, src).await
+            {
+                info!("Handled in-dialog re-INVITE successfully");
+                return true;
             }
         }
 
@@ -672,11 +664,10 @@ impl CallManager {
                 }
                 if let Ok(addrs) =
                     sip_transport::resolve_sip_target(&a.registrar, a.registrar_port).await
+                    && addrs.into_iter().any(|addr| addr.ip() == src.ip())
                 {
-                    if addrs.into_iter().any(|addr| addr.ip() == src.ip()) {
-                        is_trusted_origin = true;
-                        break;
-                    }
+                    is_trusted_origin = true;
+                    break;
                 }
             }
         }
@@ -854,67 +845,67 @@ impl CallManager {
 
                     {
                         let mut active = active_call_clone.lock().await;
-                        if let Some(ref mut call) = *active {
-                            if call.id == call_id {
-                                let effective_state = match new_state {
-                                    CallState::Active { started_at } => {
-                                        let actual_start = call.connected_at.unwrap_or(started_at);
-                                        CallState::Active {
-                                            started_at: actual_start,
-                                        }
+                        if let Some(ref mut call) = *active
+                            && call.id == call_id
+                        {
+                            let effective_state = match new_state {
+                                CallState::Active { started_at } => {
+                                    let actual_start = call.connected_at.unwrap_or(started_at);
+                                    CallState::Active {
+                                        started_at: actual_start,
                                     }
-                                    s => s,
-                                };
-                                call.state = effective_state.clone();
-                                broadcast_state = effective_state;
-
-                                if let CallState::Active { started_at } = call.state {
-                                    if call.connected_at.is_none() {
-                                        call.connected_at = Some(started_at);
-
-                                        // Connect real-time audio pipeline
-                                        let audio_cfg =
-                                            storage_clone.get_audio_config().unwrap_or_default();
-                                        let in_dev = audio_cfg.input_device_id.as_deref();
-                                        let out_dev = audio_cfg.output_device_id.as_deref();
-
-                                        let (pcm_rx, _dtmf_rx) =
-                                            session_for_audio.take_audio_channels().await;
-                                        let mut engine = audio_engine_clone.lock().await;
-                                        if let Some(rx) = pcm_rx {
-                                            let _ = engine.start_output(out_dev, rx);
-                                        }
-                                        let (mic_tx, mut mic_rx) = tokio::sync::mpsc::channel(32);
-                                        if engine.start_input(in_dev, mic_tx).is_ok() {
-                                            let sess = session_for_audio.clone();
-                                            tokio::spawn(async move {
-                                                while let Some(frame) = mic_rx.recv().await {
-                                                    if sess.send_audio_frame(frame).await.is_err() {
-                                                        break;
-                                                    }
-                                                }
-                                            });
-                                        }
-                                    }
-                                } else if let CallState::Terminated { ref reason } = call.state {
-                                    call_ended = true;
-                                    let duration_secs = call
-                                        .connected_at
-                                        .map(|c| (Utc::now() - c).num_seconds().max(0) as u32)
-                                        .unwrap_or(0);
-
-                                    audio_engine_clone.lock().await.stop();
-
-                                    entry_to_log = Some(CallLogEntry {
-                                        id: call.id,
-                                        account_id: call.account_id,
-                                        direction: call.direction,
-                                        remote_party: call.remote_party.clone(),
-                                        started_at: call.created_at,
-                                        duration_seconds: duration_secs,
-                                        disconnect_reason: reason.to_string(),
-                                    });
                                 }
+                                s => s,
+                            };
+                            call.state = effective_state.clone();
+                            broadcast_state = effective_state;
+
+                            if let CallState::Active { started_at } = call.state {
+                                if call.connected_at.is_none() {
+                                    call.connected_at = Some(started_at);
+
+                                    // Connect real-time audio pipeline
+                                    let audio_cfg =
+                                        storage_clone.get_audio_config().unwrap_or_default();
+                                    let in_dev = audio_cfg.input_device_id.as_deref();
+                                    let out_dev = audio_cfg.output_device_id.as_deref();
+
+                                    let (pcm_rx, _dtmf_rx) =
+                                        session_for_audio.take_audio_channels().await;
+                                    let mut engine = audio_engine_clone.lock().await;
+                                    if let Some(rx) = pcm_rx {
+                                        let _ = engine.start_output(out_dev, rx);
+                                    }
+                                    let (mic_tx, mut mic_rx) = tokio::sync::mpsc::channel(32);
+                                    if engine.start_input(in_dev, mic_tx).is_ok() {
+                                        let sess = session_for_audio.clone();
+                                        tokio::spawn(async move {
+                                            while let Some(frame) = mic_rx.recv().await {
+                                                if sess.send_audio_frame(frame).await.is_err() {
+                                                    break;
+                                                }
+                                            }
+                                        });
+                                    }
+                                }
+                            } else if let CallState::Terminated { ref reason } = call.state {
+                                call_ended = true;
+                                let duration_secs = call
+                                    .connected_at
+                                    .map(|c| (Utc::now() - c).num_seconds().max(0) as u32)
+                                    .unwrap_or(0);
+
+                                audio_engine_clone.lock().await.stop();
+
+                                entry_to_log = Some(CallLogEntry {
+                                    id: call.id,
+                                    account_id: call.account_id,
+                                    direction: call.direction,
+                                    remote_party: call.remote_party.clone(),
+                                    started_at: call.created_at,
+                                    duration_seconds: duration_secs,
+                                    disconnect_reason: reason.to_string(),
+                                });
                             }
                         }
 
@@ -949,13 +940,13 @@ impl CallManager {
         };
 
         let session = self.active_session.lock().await.clone();
-        if let Some(ActiveSession::Incoming(ref s)) = session {
-            if s.sip_call_id == call_id_str {
-                if let Err(e) = s.handle_cancel(&req).await {
-                    warn!(error = %e, "Failed to handle incoming CANCEL");
-                }
-                return true;
+        if let Some(ActiveSession::Incoming(ref s)) = session
+            && s.sip_call_id == call_id_str
+        {
+            if let Err(e) = s.handle_cancel(&req).await {
+                warn!(error = %e, "Failed to handle incoming CANCEL");
             }
+            return true;
         }
         false
     }
@@ -968,28 +959,28 @@ impl CallManager {
         };
 
         let session = self.active_session.lock().await.clone();
-        if let Some(ref sess) = session {
-            if sess.sip_call_id() == call_id_str {
-                if !req.body.is_empty() {
-                    if let Ok(sdp) = sip_protocol::SdpSession::parse(&req.body) {
-                        let new_dest = SocketAddr::new(sdp.connection_ip, sdp.audio_port);
-                        match sess {
-                            ActiveSession::Outgoing(s) => {
-                                if let Some(ref m) = *s.media_session.lock().await {
-                                    m.update_destination(new_dest).await;
-                                }
-                            }
-                            ActiveSession::Incoming(s) => {
-                                if let Some(ref m) = *s.media_session.lock().await {
-                                    m.update_destination(new_dest).await;
-                                }
-                            }
+        if let Some(ref sess) = session
+            && sess.sip_call_id() == call_id_str
+        {
+            if !req.body.is_empty()
+                && let Ok(sdp) = sip_protocol::SdpSession::parse(&req.body)
+            {
+                let new_dest = SocketAddr::new(sdp.connection_ip, sdp.audio_port);
+                match sess {
+                    ActiveSession::Outgoing(s) => {
+                        if let Some(ref m) = *s.media_session.lock().await {
+                            m.update_destination(new_dest).await;
+                        }
+                    }
+                    ActiveSession::Incoming(s) => {
+                        if let Some(ref m) = *s.media_session.lock().await {
+                            m.update_destination(new_dest).await;
                         }
                     }
                 }
-                debug!(call_id = %sess.call_id(), "Absorbed incoming in-dialog ACK");
-                return true;
             }
+            debug!(call_id = %sess.call_id(), "Absorbed incoming in-dialog ACK");
+            return true;
         }
         false
     }
@@ -1024,30 +1015,30 @@ impl CallManager {
 
     pub async fn answer_call(&self, call_id: CallId) -> Result<(), String> {
         let session = self.active_session.lock().await.clone();
-        if let Some(ActiveSession::Incoming(ref s)) = session {
-            if s.call_id == call_id {
-                s.answer(0, sip_domain::AudioCodec::Pcma).await?;
+        if let Some(ActiveSession::Incoming(ref s)) = session
+            && s.call_id == call_id
+        {
+            s.answer(0, sip_domain::AudioCodec::Pcma).await?;
 
-                let notif = self.notifier.lock().await;
-                if let Some(ref n) = *notif {
-                    let _ = n.close_call_notification(call_id).await;
-                }
-                return Ok(());
+            let notif = self.notifier.lock().await;
+            if let Some(ref n) = *notif {
+                let _ = n.close_call_notification(call_id).await;
             }
+            return Ok(());
         }
 
         let mut active = self.active_call.lock().await;
-        if let Some(call) = active.as_mut() {
-            if call.id == call_id {
-                let now = Utc::now();
-                call.state = CallState::Active { started_at: now };
-                call.connected_at = Some(now);
-                info!(call_id = %call_id, "Answered incoming call");
-                let _ = self
-                    .state_tx
-                    .send((call_id, CallState::Active { started_at: now }));
-                return Ok(());
-            }
+        if let Some(call) = active.as_mut()
+            && call.id == call_id
+        {
+            let now = Utc::now();
+            call.state = CallState::Active { started_at: now };
+            call.connected_at = Some(now);
+            info!(call_id = %call_id, "Answered incoming call");
+            let _ = self
+                .state_tx
+                .send((call_id, CallState::Active { started_at: now }));
+            return Ok(());
         }
         Err(format!(
             "Incoming call {} not found or cannot be answered",
@@ -1058,30 +1049,30 @@ impl CallManager {
     pub async fn reject_call(&self, call_id: CallId) -> Result<(), String> {
         let reject_mode = self.storage.get_reject_mode().unwrap_or_default();
         let session = self.active_session.lock().await.clone();
-        if let Some(ActiveSession::Incoming(ref s)) = session {
-            if s.call_id == call_id {
-                self.audio_engine.lock().await.stop();
-                match reject_mode {
-                    CallRejectMode::Decline603 => {
-                        let _ = s.reject(603, "Decline").await;
-                    }
-                    CallRejectMode::BusyHere486 => {
-                        let _ = s.reject(486, "Busy Here").await;
-                    }
-                    CallRejectMode::BusyEverywhere600 => {
-                        let _ = s.reject(600, "Busy Everywhere").await;
-                    }
-                    CallRejectMode::AnswerAndDrop => {
-                        let _ = s.answer_and_drop().await;
-                    }
+        if let Some(ActiveSession::Incoming(ref s)) = session
+            && s.call_id == call_id
+        {
+            self.audio_engine.lock().await.stop();
+            match reject_mode {
+                CallRejectMode::Decline603 => {
+                    let _ = s.reject(603, "Decline").await;
                 }
-
-                let notif = self.notifier.lock().await;
-                if let Some(ref n) = *notif {
-                    let _ = n.close_call_notification(call_id).await;
+                CallRejectMode::BusyHere486 => {
+                    let _ = s.reject(486, "Busy Here").await;
                 }
-                return Ok(());
+                CallRejectMode::BusyEverywhere600 => {
+                    let _ = s.reject(600, "Busy Everywhere").await;
+                }
+                CallRejectMode::AnswerAndDrop => {
+                    let _ = s.answer_and_drop().await;
+                }
             }
+
+            let notif = self.notifier.lock().await;
+            if let Some(ref n) = *notif {
+                let _ = n.close_call_notification(call_id).await;
+            }
+            return Ok(());
         }
         self.end_call(call_id, DisconnectReason::Rejected).await;
         Ok(())
@@ -1089,11 +1080,11 @@ impl CallManager {
 
     pub async fn update_call_state(&self, call_id: CallId, state: CallState) {
         let mut active = self.active_call.lock().await;
-        if let Some(call) = active.as_mut() {
-            if call.id == call_id {
-                call.state = state.clone();
-                let _ = self.state_tx.send((call_id, state));
-            }
+        if let Some(call) = active.as_mut()
+            && call.id == call_id
+        {
+            call.state = state.clone();
+            let _ = self.state_tx.send((call_id, state));
         }
     }
 
@@ -1101,24 +1092,24 @@ impl CallManager {
         let mut entry_to_log = None;
         {
             let mut active = self.active_call.lock().await;
-            if let Some(ref call) = *active {
-                if call.id == call_id {
-                    let duration_secs = call
-                        .connected_at
-                        .map(|c| (Utc::now() - c).num_seconds().max(0) as u32)
-                        .unwrap_or(0);
+            if let Some(ref call) = *active
+                && call.id == call_id
+            {
+                let duration_secs = call
+                    .connected_at
+                    .map(|c| (Utc::now() - c).num_seconds().max(0) as u32)
+                    .unwrap_or(0);
 
-                    entry_to_log = Some(CallLogEntry {
-                        id: call.id,
-                        account_id: call.account_id,
-                        direction: call.direction,
-                        remote_party: call.remote_party.clone(),
-                        started_at: call.created_at,
-                        duration_seconds: duration_secs,
-                        disconnect_reason: reason.to_string(),
-                    });
-                    *active = None;
-                }
+                entry_to_log = Some(CallLogEntry {
+                    id: call.id,
+                    account_id: call.account_id,
+                    direction: call.direction,
+                    remote_party: call.remote_party.clone(),
+                    started_at: call.created_at,
+                    duration_seconds: duration_secs,
+                    disconnect_reason: reason.to_string(),
+                });
+                *active = None;
             }
         }
 

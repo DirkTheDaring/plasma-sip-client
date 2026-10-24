@@ -74,13 +74,12 @@ impl JitterBuffer {
 
         // Keep playout sequence synchronized with surviving buffer window.
         // If eviction discarded packets ahead of playout, advance next to match the oldest surviving packet.
-        if let Some(&first_seq) = self.buffer.keys().next() {
-            if let Some(next) = self.next_playout_seq {
-                if next < first_seq {
-                    self.packets_lost += (first_seq - next) as u64;
-                    self.next_playout_seq = Some(first_seq);
-                }
-            }
+        if let Some(&first_seq) = self.buffer.keys().next()
+            && let Some(next) = self.next_playout_seq
+            && next < first_seq
+        {
+            self.packets_lost += (first_seq - next) as u64;
+            self.next_playout_seq = Some(first_seq);
         }
     }
 
@@ -98,10 +97,7 @@ impl JitterBuffer {
             }
         }
 
-        let next = match self.next_playout_seq {
-            Some(seq) => seq,
-            None => return None,
-        };
+        let next = self.next_playout_seq?;
 
         // 1. Direct hit: packet next is present in the buffer
         if let Some(pkt) = self.buffer.remove(&next) {

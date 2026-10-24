@@ -512,10 +512,10 @@ fn extract_granted_expires(resp: &SipResponse, configured_expires: u32) -> u64 {
     }
 
     // 2. Check top-level Expires header
-    if let Some(val) = resp.headers.get("Expires") {
-        if let Ok(secs) = val.trim().parse::<u64>() {
-            return secs;
-        }
+    if let Some(val) = resp.headers.get("Expires")
+        && let Ok(secs) = val.trim().parse::<u64>()
+    {
+        return secs;
     }
 
     configured_expires as u64

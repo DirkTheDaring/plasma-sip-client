@@ -338,10 +338,10 @@ pub fn extract_tag(header: &str) -> Option<String> {
 
 pub fn extract_target_uri(target: &str) -> String {
     let trimmed = target.trim();
-    if let Some(start) = trimmed.find('<') {
-        if let Some(end) = trimmed[start + 1..].find('>') {
-            return trimmed[start + 1..start + 1 + end].trim().to_string();
-        }
+    if let Some(start) = trimmed.find('<')
+        && let Some(end) = trimmed[start + 1..].find('>')
+    {
+        return trimmed[start + 1..start + 1 + end].trim().to_string();
     }
     trimmed.to_string()
 }

@@ -53,10 +53,10 @@ impl SipClient {
                                 }
                                 Ok(SipMessage::Request(req)) => {
                                     debug!(method = %req.method, "Incoming SIP request received");
-                                    if let Some(ref handler) = self.request_handler {
-                                        if !handler.handle_request(req.clone(), src).await {
-                                            debug!(method = %req.method, "Incoming SIP request not handled");
-                                        }
+                                    if let Some(ref handler) = self.request_handler
+                                        && !handler.handle_request(req.clone(), src).await
+                                    {
+                                        debug!(method = %req.method, "Incoming SIP request not handled");
                                     }
                                 }
                                 Err(e) => {

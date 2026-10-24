@@ -504,10 +504,10 @@ impl PlasmaSipDbusService {
         if let Err(e) = self.storage.save_phonebook_config(&cfg) {
             return format!("Error saving phonebook config: {}", e);
         }
-        if !password.is_empty() {
-            if let Err(e) = self.storage.save_phonebook_secret(password) {
-                return format!("Error saving phonebook password: {}", e);
-            }
+        if !password.is_empty()
+            && let Err(e) = self.storage.save_phonebook_secret(password)
+        {
+            return format!("Error saving phonebook password: {}", e);
         }
         "OK".into()
     }
@@ -744,20 +744,20 @@ impl PlasmaSipDbusService {
     /// Synchronizes phonebook contacts from the configured AVM FRITZ!Box router.
     pub async fn do_sync_phonebook(&self) -> Result<usize, String> {
         // 1. Check if dedicated FRITZ!Box phonebook config and password exist
-        if let Ok(pb_cfg) = self.storage.get_phonebook_config() {
-            if let Ok(Some(secret)) = self.storage.get_phonebook_secret() {
-                if !pb_cfg.username.is_empty() && !secret.is_empty() {
-                    return self
-                        .do_sync_phonebook_with_config(
-                            &pb_cfg.host,
-                            &pb_cfg.username,
-                            &secret,
-                            pb_cfg.phonebook_id,
-                            false,
-                        )
-                        .await;
-                }
-            }
+        if let Ok(pb_cfg) = self.storage.get_phonebook_config()
+            && let Ok(Some(secret)) = self.storage.get_phonebook_secret()
+            && !pb_cfg.username.is_empty()
+            && !secret.is_empty()
+        {
+            return self
+                .do_sync_phonebook_with_config(
+                    &pb_cfg.host,
+                    &pb_cfg.username,
+                    &secret,
+                    pb_cfg.phonebook_id,
+                    false,
+                )
+                .await;
         }
 
         // 2. Fall back to finding a FRITZ!Box SIP account

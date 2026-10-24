@@ -531,11 +531,11 @@ async fn test_dbus_service_api_contract() {
     )
     .await
     {
-        if let Ok(args) = sig.args() {
-            if args.state().contains("terminated") {
-                terminated_signal_received = true;
-                break;
-            }
+        if let Ok(args) = sig.args()
+            && args.state().contains("terminated")
+        {
+            terminated_signal_received = true;
+            break;
         }
     }
     assert!(

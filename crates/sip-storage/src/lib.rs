@@ -188,10 +188,10 @@ impl StorageManager {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            if let Ok(metadata) = std::fs::metadata(&path) {
-                if metadata.is_file() {
-                    let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
-                }
+            if let Ok(metadata) = std::fs::metadata(&path)
+                && metadata.is_file()
+            {
+                let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
             }
         }
         let manager = Self {
@@ -522,10 +522,10 @@ impl StorageManager {
     /// Retrieves account credentials from Keyring, or falls back to SQLite persistent storage.
     pub fn get_account_secret(&self, id: AccountId) -> Result<Option<String>, StorageError> {
         // Check backend first
-        if let Ok(Some(pw)) = self.backend.get_secret(id) {
-            if !pw.is_empty() {
-                return Ok(Some(pw));
-            }
+        if let Ok(Some(pw)) = self.backend.get_secret(id)
+            && !pw.is_empty()
+        {
+            return Ok(Some(pw));
         }
 
         // Fallback to SQLite secure database
@@ -577,10 +577,10 @@ impl StorageManager {
     }
 
     pub fn get_audio_config(&self) -> Result<AudioConfig, StorageError> {
-        if let Some(val) = self.get_setting("audio_config")? {
-            if let Ok(cfg) = serde_json::from_str::<AudioConfig>(&val) {
-                return Ok(cfg);
-            }
+        if let Some(val) = self.get_setting("audio_config")?
+            && let Ok(cfg) = serde_json::from_str::<AudioConfig>(&val)
+        {
+            return Ok(cfg);
         }
         Ok(AudioConfig::default())
     }
@@ -603,10 +603,10 @@ impl StorageManager {
     }
 
     pub fn get_phonebook_config(&self) -> Result<FritzBoxPhonebookConfig, StorageError> {
-        if let Some(val) = self.get_setting("fritzbox_phonebook_config")? {
-            if let Ok(cfg) = serde_json::from_str::<FritzBoxPhonebookConfig>(&val) {
-                return Ok(cfg);
-            }
+        if let Some(val) = self.get_setting("fritzbox_phonebook_config")?
+            && let Ok(cfg) = serde_json::from_str::<FritzBoxPhonebookConfig>(&val)
+        {
+            return Ok(cfg);
         }
         Ok(FritzBoxPhonebookConfig::default())
     }
@@ -783,10 +783,10 @@ impl StorageManager {
                     if n.raw_number.contains(q) || n.normalized_digits.contains(q) {
                         return true;
                     }
-                    if let Some(ref qd) = n.quickdial {
-                        if qd.contains(q) {
-                            return true;
-                        }
+                    if let Some(ref qd) = n.quickdial
+                        && qd.contains(q)
+                    {
+                        return true;
                     }
                 }
                 if is_numeric && q.len() >= 2 {

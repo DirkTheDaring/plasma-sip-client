@@ -14,6 +14,7 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   discover:
@@ -30,7 +31,7 @@ jobs:
       source_sha: ${{ github.sha }}
     steps:
       - name: Checkout exact tagged commit
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
 
@@ -179,7 +180,7 @@ jobs:
           git config --global --add safe.directory "*"
 
       - name: Checkout exact tagged commit in container
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.discover.outputs.source_sha }}
 
@@ -276,7 +277,7 @@ jobs:
 
       - name: Upload Fedora ${{ matrix.fedora_version }} RPM Artifacts and Logs
         if: always()
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        uses: actions/upload-artifact@v7
         with:
           name: plasma-sip-fedora${{ matrix.fedora_version }}-x86_64-rpm
           path: |
@@ -317,12 +318,12 @@ jobs:
       contents: write
     steps:
       - name: Checkout exact tagged commit
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.discover.outputs.source_sha }}
 
       - name: Download all release artifacts from current workflow run
-        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
+        uses: actions/download-artifact@v8
         with:
           path: downloaded_artifacts
 

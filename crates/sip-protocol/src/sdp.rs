@@ -177,10 +177,10 @@ impl SdpSession {
             if let Some(c_line) = trimmed.strip_prefix("c=") {
                 // Example: c=IN IP4 192.0.2.1
                 let parts: Vec<&str> = c_line.split_whitespace().collect();
-                if parts.len() >= 3 {
-                    if let Ok(ip) = parts[2].parse::<IpAddr>() {
-                        connection_ip = Some(ip);
-                    }
+                if parts.len() >= 3
+                    && let Ok(ip) = parts[2].parse::<IpAddr>()
+                {
+                    connection_ip = Some(ip);
                 }
             } else if let Some(m_line) = trimmed.strip_prefix("m=") {
                 // Example: m=audio 7078 RTP/AVP 8 0 101
@@ -207,10 +207,10 @@ impl SdpSession {
                 } else if let Some(rtpmap_body) = trimmed.strip_prefix("a=rtpmap:") {
                     // Example: a=rtpmap:96 telephone-event/8000
                     let mut parts = rtpmap_body.split_whitespace();
-                    if let (Some(pt_str), Some(encoding)) = (parts.next(), parts.next()) {
-                        if let Ok(pt) = pt_str.parse::<u8>() {
-                            rtp_map.insert(pt, encoding.to_string());
-                        }
+                    if let (Some(pt_str), Some(encoding)) = (parts.next(), parts.next())
+                        && let Ok(pt) = pt_str.parse::<u8>()
+                    {
+                        rtp_map.insert(pt, encoding.to_string());
                     }
                 }
             }

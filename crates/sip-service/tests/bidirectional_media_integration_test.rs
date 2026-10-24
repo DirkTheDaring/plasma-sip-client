@@ -192,8 +192,8 @@ async fn test_r3_real_sip_call_bidirectional_rtp_exchange() {
             tokio::select! {
                 _ = &mut rtp_timeout => break,
                 recv_res = pbx_rtp_clone.recv_from(&mut rtp_buf) => {
-                    if let Ok((len, _from)) = recv_res {
-                        if let Ok(rtp) = RtpPacket::parse(&rtp_buf[..len]) {
+                    if let Ok((len, _from)) = recv_res
+                        && let Ok(rtp) = RtpPacket::parse(&rtp_buf[..len]) {
                             assert_eq!(rtp.payload_type, 8, "Expected PCMA payload type 8");
                             assert_eq!(rtp.payload.len(), 160, "Expected 160 bytes for 20ms G.711 frame");
                             packets_received += 1;
@@ -201,7 +201,6 @@ async fn test_r3_real_sip_call_bidirectional_rtp_exchange() {
                                 break;
                             }
                         }
-                    }
                 }
             }
         }
@@ -235,13 +234,11 @@ async fn test_r3_real_sip_call_bidirectional_rtp_exchange() {
     for _ in 0..5 {
         if let Ok(Ok((id, state))) =
             tokio::time::timeout(Duration::from_millis(400), call_events.recv()).await
+            && id == call_id
+            && let CallState::Active { .. } = state
         {
-            if id == call_id {
-                if let CallState::Active { .. } = state {
-                    active = true;
-                    break;
-                }
-            }
+            active = true;
+            break;
         }
     }
     assert!(active, "Call should transition to Active");
@@ -303,46 +300,46 @@ async fn test_r3_repeated_call_media_cleanup_no_leaks() {
             // Receive INVITE
             let (len, src) = pbx_sip_socket.recv_from(&mut buf).await.unwrap();
             let text = std::str::from_utf8(&buf[..len]).unwrap();
-            if let Ok(SipMessage::Request(req)) = SipMessage::parse(text) {
-                if req.method == SipMethod::Invite {
-                    let to_tag = generate_tag();
-                    let sdp = SdpSession::new(pbx_rtp_addr.ip(), pbx_rtp_addr.port(), vec![8, 101]);
-                    let ok = SipResponse::create_for_request(
-                        &req,
-                        200,
-                        "OK",
-                        Some(&to_tag),
-                        Some(&format!("<sip:pbx@{}>", pbx_sip_addr)),
-                        Some(sdp.serialize()),
-                    );
-                    pbx_sip_socket
-                        .send_to(ok.serialize().as_bytes(), src)
-                        .await
-                        .unwrap();
+            if let Ok(SipMessage::Request(req)) = SipMessage::parse(text)
+                && req.method == SipMethod::Invite
+            {
+                let to_tag = generate_tag();
+                let sdp = SdpSession::new(pbx_rtp_addr.ip(), pbx_rtp_addr.port(), vec![8, 101]);
+                let ok = SipResponse::create_for_request(
+                    &req,
+                    200,
+                    "OK",
+                    Some(&to_tag),
+                    Some(&format!("<sip:pbx@{}>", pbx_sip_addr)),
+                    Some(sdp.serialize()),
+                );
+                pbx_sip_socket
+                    .send_to(ok.serialize().as_bytes(), src)
+                    .await
+                    .unwrap();
 
-                    // Receive ACK
-                    let (len_ack, _) = pbx_sip_socket.recv_from(&mut buf).await.unwrap();
-                    let text_ack = std::str::from_utf8(&buf[..len_ack]).unwrap();
-                    let ack = match SipMessage::parse(text_ack).unwrap() {
-                        SipMessage::Request(r) => r,
-                        _ => panic!("Expected ACK"),
-                    };
-                    assert_eq!(ack.method, SipMethod::Ack);
+                // Receive ACK
+                let (len_ack, _) = pbx_sip_socket.recv_from(&mut buf).await.unwrap();
+                let text_ack = std::str::from_utf8(&buf[..len_ack]).unwrap();
+                let ack = match SipMessage::parse(text_ack).unwrap() {
+                    SipMessage::Request(r) => r,
+                    _ => panic!("Expected ACK"),
+                };
+                assert_eq!(ack.method, SipMethod::Ack);
 
-                    // Receive BYE
-                    let (len_bye, bye_src) = pbx_sip_socket.recv_from(&mut buf).await.unwrap();
-                    let text_bye = std::str::from_utf8(&buf[..len_bye]).unwrap();
-                    let bye = match SipMessage::parse(text_bye).unwrap() {
-                        SipMessage::Request(r) => r,
-                        _ => panic!("Expected BYE"),
-                    };
-                    assert_eq!(bye.method, SipMethod::Bye);
-                    let ok_bye = SipResponse::create_for_request(&bye, 200, "OK", None, None, None);
-                    pbx_sip_socket
-                        .send_to(ok_bye.serialize().as_bytes(), bye_src)
-                        .await
-                        .unwrap();
-                }
+                // Receive BYE
+                let (len_bye, bye_src) = pbx_sip_socket.recv_from(&mut buf).await.unwrap();
+                let text_bye = std::str::from_utf8(&buf[..len_bye]).unwrap();
+                let bye = match SipMessage::parse(text_bye).unwrap() {
+                    SipMessage::Request(r) => r,
+                    _ => panic!("Expected BYE"),
+                };
+                assert_eq!(bye.method, SipMethod::Bye);
+                let ok_bye = SipResponse::create_for_request(&bye, 200, "OK", None, None, None);
+                pbx_sip_socket
+                    .send_to(ok_bye.serialize().as_bytes(), bye_src)
+                    .await
+                    .unwrap();
             }
         }
     });
@@ -359,10 +356,10 @@ async fn test_r3_repeated_call_media_cleanup_no_leaks() {
         loop {
             if let Ok(Ok((id, state))) =
                 tokio::time::timeout(Duration::from_millis(300), events.recv()).await
+                && id == call_id
+                && matches!(state, CallState::Active { .. })
             {
-                if id == call_id && matches!(state, CallState::Active { .. }) {
-                    break;
-                }
+                break;
             }
         }
 
@@ -374,10 +371,10 @@ async fn test_r3_repeated_call_media_cleanup_no_leaks() {
         loop {
             if let Ok(Ok((id, state))) =
                 tokio::time::timeout(Duration::from_millis(300), events.recv()).await
+                && id == call_id
+                && matches!(state, CallState::Terminated { .. })
             {
-                if id == call_id && matches!(state, CallState::Terminated { .. }) {
-                    break;
-                }
+                break;
             }
         }
 
@@ -449,14 +446,12 @@ async fn test_r3_dtmf_telephony_events_during_call() {
             tokio::select! {
                 _ = &mut timeout => break,
                 recv_res = pbx_rtp_clone.recv_from(&mut rtp_buf) => {
-                    if let Ok((len, _)) = recv_res {
-                        if let Ok(pkt) = RtpPacket::parse(&rtp_buf[..len]) {
-                            if pkt.payload_type == 101 {
+                    if let Ok((len, _)) = recv_res
+                        && let Ok(pkt) = RtpPacket::parse(&rtp_buf[..len])
+                            && pkt.payload_type == 101 {
                                 dtmf_received = true;
                                 break;
                             }
-                        }
-                    }
                 }
             }
         }
@@ -486,10 +481,10 @@ async fn test_r3_dtmf_telephony_events_during_call() {
     loop {
         if let Ok(Ok((id, state))) =
             tokio::time::timeout(Duration::from_millis(300), events.recv()).await
+            && id == call_id
+            && matches!(state, CallState::Active { .. })
         {
-            if id == call_id && matches!(state, CallState::Active { .. }) {
-                break;
-            }
+            break;
         }
     }
 

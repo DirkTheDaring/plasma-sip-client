@@ -128,7 +128,7 @@ impl AudioEngine {
         let sample_rate = default_config.sample_rate();
         let channels = default_config.channels();
         let sample_format = default_config.sample_format();
-        let mut stream_config: cpal::StreamConfig = default_config.clone().into();
+        let mut stream_config: cpal::StreamConfig = default_config.into();
         match default_config.buffer_size() {
             cpal::SupportedBufferSize::Range { min, max } if *min <= 1024 && 1024 <= *max => {
                 stream_config.buffer_size = cpal::BufferSize::Fixed(1024);
@@ -217,7 +217,7 @@ impl AudioEngine {
                         let chunk = std::mem::replace(&mut frame, Vec::with_capacity(160));
                         samples_captured.fetch_add(160, Ordering::Relaxed);
                         frames_captured_count += 1;
-                        if frames_captured_count == 1 || frames_captured_count % 250 == 0 {
+                        if frames_captured_count == 1 || frames_captured_count.is_multiple_of(250) {
                             info!(
                                 frames_captured_count,
                                 "Hardware input capture delivering frames to engine"
@@ -312,7 +312,7 @@ impl AudioEngine {
         let sample_rate = default_config.sample_rate();
         let channels = default_config.channels();
         let sample_format = default_config.sample_format();
-        let mut stream_config: cpal::StreamConfig = default_config.clone().into();
+        let mut stream_config: cpal::StreamConfig = default_config.into();
         match default_config.buffer_size() {
             cpal::SupportedBufferSize::Range { min, max } if *min <= 1024 && 1024 <= *max => {
                 stream_config.buffer_size = cpal::BufferSize::Fixed(1024);
@@ -388,7 +388,7 @@ impl AudioEngine {
             let mut frames_played_count: u64 = 0;
             while let Some(frame) = rx.recv().await {
                 frames_played_count += 1;
-                if frames_played_count == 1 || frames_played_count % 250 == 0 {
+                if frames_played_count == 1 || frames_played_count.is_multiple_of(250) {
                     info!(
                         frames_played_count,
                         "Hardware output playback receiving frames from engine"

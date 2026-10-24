@@ -46,7 +46,7 @@ async fn test_diagnose_jabra() {
             dev.description().map(|d| d.name().to_string())
         );
         if let Ok(cfg) = dev.default_input_config() {
-            let mut stream_cfg: cpal::StreamConfig = cfg.clone().into();
+            let mut stream_cfg: cpal::StreamConfig = cfg.into();
             stream_cfg.buffer_size = cpal::BufferSize::Fixed(1024);
             let res = dev.build_input_stream(stream_cfg, |_: &[f32], _| {}, |_| {}, None);
             println!("build_input_stream with Fixed(1024): {:?}", res.is_ok());
@@ -59,7 +59,7 @@ async fn test_diagnose_jabra() {
             dev.description().map(|d| d.name().to_string())
         );
         if let Ok(cfg) = dev.default_output_config() {
-            let mut stream_cfg: cpal::StreamConfig = cfg.clone().into();
+            let mut stream_cfg: cpal::StreamConfig = cfg.into();
             stream_cfg.buffer_size = cpal::BufferSize::Fixed(1024);
             let res = dev.build_output_stream(stream_cfg, |_: &mut [f32], _| {}, |_| {}, None);
             println!("build_output_stream with Fixed(1024): {:?}", res.is_ok());

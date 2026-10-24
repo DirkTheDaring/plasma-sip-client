@@ -184,12 +184,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             _ = async {
                 if let Some(mut stream) = name_lost_stream {
                     while let Some(sig) = stream.next().await {
-                        if let Ok(args) = sig.args() {
-                            if args.name == "org.kde.PlasmaSip" {
+                        if let Ok(args) = sig.args()
+                            && args.name == "org.kde.PlasmaSip" {
                                 error!("Lost ownership of D-Bus name org.kde.PlasmaSip. Exiting.");
                                 return;
                             }
-                        }
                     }
                 } else {
                     futures::future::pending::<()>().await;

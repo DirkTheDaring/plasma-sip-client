@@ -294,8 +294,8 @@ impl OutgoingCallSession {
                     };
 
                     // Early Media (RFC 3960): if provisional response contains SDP, start MediaSession immediately
-                    if is_active_or_ringing && !prov.body.is_empty() {
-                        if let Ok(remote_sdp) = SdpSession::parse(&prov.body) {
+                    if is_active_or_ringing && !prov.body.is_empty()
+                        && let Ok(remote_sdp) = SdpSession::parse(&prov.body) {
                             info!(
                                 payload_types = ?remote_sdp.payload_types,
                                 "Early media SDP received in provisional response"
@@ -336,7 +336,6 @@ impl OutgoingCallSession {
                                 });
                             }
                         }
-                    }
                 }
             },
         )
@@ -438,14 +437,15 @@ impl OutgoingCallSession {
                 };
 
                 // Parse remote SDP answer
-                if !was_cancelled && !resp.body.is_empty() {
-                    if let Ok(remote_sdp) = SdpSession::parse(&resp.body) {
-                        info!(
-                            payload_types = ?remote_sdp.payload_types,
-                            "Remote SDP answer received in 200 OK"
-                        );
-                        self.setup_media_for_remote_sdp(&remote_sdp).await;
-                    }
+                if !was_cancelled
+                    && !resp.body.is_empty()
+                    && let Ok(remote_sdp) = SdpSession::parse(&resp.body)
+                {
+                    info!(
+                        payload_types = ?remote_sdp.payload_types,
+                        "Remote SDP answer received in 200 OK"
+                    );
+                    self.setup_media_for_remote_sdp(&remote_sdp).await;
                 }
 
                 // Establish Dialog
@@ -588,9 +588,9 @@ impl OutgoingCallSession {
                                 true
                             };
 
-                            if is_active_or_ringing && !prov.body.is_empty() {
-                                if let Ok(remote_sdp) = SdpSession::parse(&prov.body) {
-                                    if media_mutex2.try_lock().map(|g| g.is_none()).unwrap_or(false) {
+                            if is_active_or_ringing && !prov.body.is_empty()
+                                && let Ok(remote_sdp) = SdpSession::parse(&prov.body)
+                                    && media_mutex2.try_lock().map(|g| g.is_none()).unwrap_or(false) {
                                         let dtmf_pt = remote_sdp.dtmf_payload_type();
                                         let remote_ip = remote_sdp.connection_ip;
                                         let remote_rtp_addr = SocketAddr::new(remote_ip, remote_sdp.audio_port);
@@ -625,8 +625,6 @@ impl OutgoingCallSession {
                                             }
                                         });
                                     }
-                                }
-                            }
                         }
                     },
                 )
@@ -988,25 +986,25 @@ impl OutgoingCallSession {
         src: SocketAddr,
     ) -> Option<SipResponse> {
         let mut dialog_guard = self.dialog.lock().await;
-        if let Some(ref dialog) = *dialog_guard {
-            if dialog.matches_incoming_request(req) {
-                info!(call_id = %self.call_id, "Handling remote BYE in active dialog");
-                let resp = dialog.create_response_to_request(req, 200, "OK");
-                let _ = self
-                    .transport
-                    .send_to(resp.serialize().as_bytes(), src)
-                    .await;
-                *dialog_guard = None;
+        if let Some(ref dialog) = *dialog_guard
+            && dialog.matches_incoming_request(req)
+        {
+            info!(call_id = %self.call_id, "Handling remote BYE in active dialog");
+            let resp = dialog.create_response_to_request(req, 200, "OK");
+            let _ = self
+                .transport
+                .send_to(resp.serialize().as_bytes(), src)
+                .await;
+            *dialog_guard = None;
 
-                self.stop_media().await;
+            self.stop_media().await;
 
-                let _ = self
-                    .transition_state(CallState::Terminated {
-                        reason: DisconnectReason::RemoteHangup,
-                    })
-                    .await;
-                return Some(resp);
-            }
+            let _ = self
+                .transition_state(CallState::Terminated {
+                    reason: DisconnectReason::RemoteHangup,
+                })
+                .await;
+            return Some(resp);
         }
         drop(dialog_guard);
 

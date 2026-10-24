@@ -313,20 +313,20 @@ impl SipRequest {
 
     /// Extracts the caller party information from P-Asserted-Identity, Remote-Party-ID, or From.
     pub fn caller_info(&self) -> SipPartyInfo {
-        if let Some(pai) = self.get_header("P-Asserted-Identity") {
-            if let Some(info) = SipPartyInfo::parse(pai) {
-                return info;
-            }
+        if let Some(pai) = self.get_header("P-Asserted-Identity")
+            && let Some(info) = SipPartyInfo::parse(pai)
+        {
+            return info;
         }
-        if let Some(rpi) = self.get_header("Remote-Party-ID") {
-            if let Some(info) = SipPartyInfo::parse(rpi) {
-                return info;
-            }
+        if let Some(rpi) = self.get_header("Remote-Party-ID")
+            && let Some(info) = SipPartyInfo::parse(rpi)
+        {
+            return info;
         }
-        if let Some(from) = self.get_header("From") {
-            if let Some(info) = SipPartyInfo::parse(from) {
-                return info;
-            }
+        if let Some(from) = self.get_header("From")
+            && let Some(info) = SipPartyInfo::parse(from)
+        {
+            return info;
         }
         SipPartyInfo {
             number_or_user: "Unknown".into(),
@@ -338,25 +338,25 @@ impl SipRequest {
 
     /// Extracts the called / dialed number (callee DID) from P-Called-Party-ID, X-Called-Party-ID, Diversion, or To.
     pub fn called_info(&self) -> Option<SipPartyInfo> {
-        if let Some(p_called) = self.get_header("P-Called-Party-ID") {
-            if let Some(info) = SipPartyInfo::parse(p_called) {
-                return Some(info);
-            }
+        if let Some(p_called) = self.get_header("P-Called-Party-ID")
+            && let Some(info) = SipPartyInfo::parse(p_called)
+        {
+            return Some(info);
         }
-        if let Some(x_called) = self.get_header("X-Called-Party-ID") {
-            if let Some(info) = SipPartyInfo::parse(x_called) {
-                return Some(info);
-            }
+        if let Some(x_called) = self.get_header("X-Called-Party-ID")
+            && let Some(info) = SipPartyInfo::parse(x_called)
+        {
+            return Some(info);
         }
-        if let Some(div) = self.get_header("Diversion") {
-            if let Some(info) = SipPartyInfo::parse(div) {
-                return Some(info);
-            }
+        if let Some(div) = self.get_header("Diversion")
+            && let Some(info) = SipPartyInfo::parse(div)
+        {
+            return Some(info);
         }
-        if let Some(to) = self.get_header("To") {
-            if let Some(info) = SipPartyInfo::parse(to) {
-                return Some(info);
-            }
+        if let Some(to) = self.get_header("To")
+            && let Some(info) = SipPartyInfo::parse(to)
+        {
+            return Some(info);
         }
         None
     }
