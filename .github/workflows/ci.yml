@@ -75,6 +75,7 @@ jobs:
             libpipewire-0.3-dev \
             qt6-base-dev \
             qt6-declarative-dev \
+            qt6-wayland \
             desktop-file-utils
 
       - name: Install Rust toolchain
