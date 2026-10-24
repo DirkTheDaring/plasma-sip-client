@@ -10,8 +10,8 @@ use uuid::Uuid;
 
 use sip_domain::{
     AccountId, AudioConfig, CallDirection, CallId, CallRejectMode, Contact, ContactId,
-    ContactNumber, ContactSource, NumberType, SipAccount, TransportProtocol,
-    normalize_number_digits, text_to_t9,
+    ContactNumber, ContactSource, FritzBoxPhonebookConfig, NumberType, SipAccount,
+    TransportProtocol, normalize_number_digits, text_to_t9,
 };
 
 #[derive(Error, Debug)]
@@ -602,6 +602,41 @@ impl StorageManager {
         self.set_setting("reject_mode", mode.as_str())
     }
 
+    pub fn get_phonebook_config(&self) -> Result<FritzBoxPhonebookConfig, StorageError> {
+        if let Some(val) = self.get_setting("fritzbox_phonebook_config")? {
+            if let Ok(cfg) = serde_json::from_str::<FritzBoxPhonebookConfig>(&val) {
+                return Ok(cfg);
+            }
+        }
+        Ok(FritzBoxPhonebookConfig::default())
+    }
+
+    pub fn save_phonebook_config(
+        &self,
+        config: &FritzBoxPhonebookConfig,
+    ) -> Result<(), StorageError> {
+        let val = serde_json::to_string(config)
+            .map_err(|e| StorageError::SerializationError(e.to_string()))?;
+        self.set_setting("fritzbox_phonebook_config", &val)
+    }
+
+    pub fn save_phonebook_secret(&self, password: &str) -> Result<(), StorageError> {
+        let fake_id = AccountId(Uuid::from_u128(0xFB00_FB00_FB00_FB00_FB00_FB00_FB00_0001));
+        self.backend.save_secret(fake_id, password)
+    }
+
+    pub fn get_phonebook_secret(&self) -> Result<Option<String>, StorageError> {
+        let fake_id = AccountId(Uuid::from_u128(0xFB00_FB00_FB00_FB00_FB00_FB00_FB00_0001));
+        self.backend.get_secret(fake_id)
+    }
+
+    pub fn has_phonebook_secret(&self) -> Result<bool, StorageError> {
+        match self.get_phonebook_secret()? {
+            Some(s) => Ok(!s.trim().is_empty()),
+            None => Ok(false),
+        }
+    }
+
     // -------------------------------------------------------------------------
     // Contact persistence & Caller ID Lookup
     // -------------------------------------------------------------------------
@@ -1063,5 +1098,38 @@ mod tests {
         let remaining = storage.list_contacts().expect("list remaining");
         assert_eq!(remaining.len(), 1);
         assert_eq!(remaining[0].display_name, "Bob Builder");
+    }
+
+    #[test]
+    fn test_phonebook_config_and_secret_persistence() {
+        let storage = StorageManager::new_in_memory().expect("init storage");
+
+        // Defaults
+        let default_cfg = storage.get_phonebook_config().expect("default cfg");
+        assert_eq!(default_cfg.host, "fritz.box");
+        assert_eq!(default_cfg.username, "");
+        assert_eq!(default_cfg.phonebook_id, 0);
+        assert!(!storage.has_phonebook_secret().expect("has secret"));
+
+        // Save config
+        let cfg = FritzBoxPhonebookConfig {
+            host: "192.168.178.1".into(),
+            username: "dws_admin".into(),
+            phonebook_id: 1,
+            auto_sync: true,
+        };
+        storage.save_phonebook_config(&cfg).expect("save cfg");
+        let loaded = storage.get_phonebook_config().expect("load cfg");
+        assert_eq!(loaded, cfg);
+
+        // Save secret
+        storage
+            .save_phonebook_secret("supersecret123")
+            .expect("save secret");
+        assert!(storage.has_phonebook_secret().expect("has secret"));
+        assert_eq!(
+            storage.get_phonebook_secret().expect("get secret"),
+            Some("supersecret123".into())
+        );
     }
 }

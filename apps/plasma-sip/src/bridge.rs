@@ -49,6 +49,23 @@ pub trait PlasmaSipDaemon {
     fn search_contacts(&self, query: &str) -> zbus::Result<String>;
     fn resolve_caller_name(&self, number: &str) -> zbus::Result<String>;
     fn sync_phonebook(&self) -> zbus::Result<String>;
+    fn get_phonebook_config(&self) -> zbus::Result<String>;
+    fn save_phonebook_config(
+        &self,
+        host: &str,
+        username: &str,
+        password: &str,
+        phonebook_id: u32,
+        auto_sync: bool,
+    ) -> zbus::Result<String>;
+    fn sync_phonebook_with_config(
+        &self,
+        host: &str,
+        username: &str,
+        password: &str,
+        phonebook_id: u32,
+        save_credentials: bool,
+    ) -> zbus::Result<String>;
 
     #[zbus(signal)]
     fn registration_changed(&self, account_id: String, state: String) -> zbus::Result<()>;
@@ -110,6 +127,21 @@ pub enum UiCommand {
     RefreshContacts,
     SearchContacts(String),
     SyncPhonebook,
+    RefreshPhonebookConfig,
+    SavePhonebookConfig {
+        host: String,
+        username: String,
+        password: String,
+        phonebook_id: u32,
+        auto_sync: bool,
+    },
+    SyncPhonebookWithConfig {
+        host: String,
+        username: String,
+        password: String,
+        phonebook_id: u32,
+        save_credentials: bool,
+    },
     Reconnect,
     ReconnectAccount(String),
     Quit,
@@ -140,6 +172,11 @@ pub mod qobject {
         #[qproperty(QString, contacts_json)]
         #[qproperty(bool, is_syncing_contacts)]
         #[qproperty(QString, contact_sync_status)]
+        #[qproperty(QString, phonebook_host)]
+        #[qproperty(QString, phonebook_username)]
+        #[qproperty(i32, phonebook_id)]
+        #[qproperty(bool, phonebook_has_password)]
+        #[qproperty(bool, phonebook_auto_sync)]
         #[qproperty(QString, audio_devices_json)]
         #[qproperty(QString, audio_config_json)]
         #[qproperty(QString, status_message)]
@@ -199,6 +236,29 @@ pub mod qobject {
 
         #[qinvokable]
         fn sync_phonebook(self: Pin<&mut SipUiBridge>);
+
+        #[qinvokable]
+        fn refresh_phonebook_config(self: Pin<&mut SipUiBridge>);
+
+        #[qinvokable]
+        fn save_phonebook_config(
+            self: Pin<&mut SipUiBridge>,
+            host: QString,
+            username: QString,
+            password: QString,
+            phonebook_id: i32,
+            auto_sync: bool,
+        );
+
+        #[qinvokable]
+        fn sync_phonebook_with_config(
+            self: Pin<&mut SipUiBridge>,
+            host: QString,
+            username: QString,
+            password: QString,
+            phonebook_id: i32,
+            save_credentials: bool,
+        );
 
         #[qinvokable]
         fn refresh_devices(self: Pin<&mut SipUiBridge>);
@@ -273,6 +333,11 @@ pub struct SipUiBridgeRust {
     contacts_json: QString,
     is_syncing_contacts: bool,
     contact_sync_status: QString,
+    phonebook_host: QString,
+    phonebook_username: QString,
+    phonebook_id: i32,
+    phonebook_has_password: bool,
+    phonebook_auto_sync: bool,
     audio_devices_json: QString,
     audio_config_json: QString,
     status_message: QString,
@@ -302,6 +367,11 @@ impl Default for SipUiBridgeRust {
             contacts_json: QString::from("[]"),
             is_syncing_contacts: false,
             contact_sync_status: QString::from(""),
+            phonebook_host: QString::from("fritz.box"),
+            phonebook_username: QString::from(""),
+            phonebook_id: 0,
+            phonebook_has_password: false,
+            phonebook_auto_sync: false,
             audio_devices_json: QString::from("[]"),
             audio_config_json: QString::from("{}"),
             status_message: QString::from(""),
@@ -547,12 +617,78 @@ impl cxx_qt::Initialize for qobject::SipUiBridge {
                                     });
                                     match proxy.sync_phonebook().await {
                                         Ok(res) => {
-                                            let r_clone = res.clone();
+                                            let msg = if let Ok(v) = serde_json::from_str::<serde_json::Value>(&res) {
+                                                if v["success"].as_bool().unwrap_or(false) {
+                                                    format!("✓ Successfully synchronized {} contacts from FRITZ!Box", v["count"].as_i64().unwrap_or(0))
+                                                } else {
+                                                    format!("Sync failed: {}", v["error"].as_str().unwrap_or("Unknown error"))
+                                                }
+                                            } else {
+                                                res
+                                            };
                                             let _ = qt_thread.queue(move |mut qobj| {
                                                 qobj.as_mut().set_is_syncing_contacts(false);
-                                                qobj.as_mut().set_contact_sync_status(QString::from(&r_clone));
+                                                qobj.as_mut().set_contact_sync_status(QString::from(&msg));
                                             });
                                             update_contacts(&proxy, &qt_thread, "").await;
+                                            update_phonebook_config(&proxy, &qt_thread).await;
+                                        }
+                                        Err(e) => {
+                                            let err_msg = format!("Sync failed: {}", e);
+                                            let _ = qt_thread.queue(move |mut qobj| {
+                                                qobj.as_mut().set_is_syncing_contacts(false);
+                                                qobj.as_mut().set_contact_sync_status(QString::from(&err_msg));
+                                            });
+                                        }
+                                    }
+                                }
+                                UiCommand::RefreshPhonebookConfig => {
+                                    update_phonebook_config(&proxy, &qt_thread).await;
+                                }
+                                UiCommand::SavePhonebookConfig {
+                                    host,
+                                    username,
+                                    password,
+                                    phonebook_id,
+                                    auto_sync,
+                                } => {
+                                    let _ = proxy
+                                        .save_phonebook_config(&host, &username, &password, phonebook_id, auto_sync)
+                                        .await;
+                                    update_phonebook_config(&proxy, &qt_thread).await;
+                                }
+                                UiCommand::SyncPhonebookWithConfig {
+                                    host,
+                                    username,
+                                    password,
+                                    phonebook_id,
+                                    save_credentials,
+                                } => {
+                                    info!("Requesting configured phonebook sync from GUI");
+                                    let _ = qt_thread.queue(|mut qobj| {
+                                        qobj.as_mut().set_is_syncing_contacts(true);
+                                        qobj.as_mut().set_contact_sync_status(QString::from("Connecting to FRITZ!Box..."));
+                                    });
+                                    match proxy
+                                        .sync_phonebook_with_config(&host, &username, &password, phonebook_id, save_credentials)
+                                        .await
+                                    {
+                                        Ok(res) => {
+                                            let msg = if let Ok(v) = serde_json::from_str::<serde_json::Value>(&res) {
+                                                if v["success"].as_bool().unwrap_or(false) {
+                                                    format!("✓ Successfully synchronized {} contacts from FRITZ!Box", v["count"].as_i64().unwrap_or(0))
+                                                } else {
+                                                    format!("Sync failed: {}", v["error"].as_str().unwrap_or("Unknown error"))
+                                                }
+                                            } else {
+                                                res
+                                            };
+                                            let _ = qt_thread.queue(move |mut qobj| {
+                                                qobj.as_mut().set_is_syncing_contacts(false);
+                                                qobj.as_mut().set_contact_sync_status(QString::from(&msg));
+                                            });
+                                            update_contacts(&proxy, &qt_thread, "").await;
+                                            update_phonebook_config(&proxy, &qt_thread).await;
                                         }
                                         Err(e) => {
                                             let err_msg = format!("Sync failed: {}", e);
@@ -910,6 +1046,7 @@ async fn fetch_and_update_state(
     update_active_call(proxy, qt_thread, tray_handle).await;
     update_history(proxy, qt_thread, tray_handle).await;
     update_contacts(proxy, qt_thread, "").await;
+    update_phonebook_config(proxy, qt_thread).await;
     update_devices(proxy, qt_thread).await;
     update_reject_mode(proxy, qt_thread).await;
 }
@@ -1129,6 +1266,30 @@ async fn update_contacts(
     }
 }
 
+async fn update_phonebook_config(
+    proxy: &PlasmaSipDaemonProxy<'_>,
+    qt_thread: &cxx_qt::CxxQtThread<qobject::SipUiBridge>,
+) {
+    if let Ok(cfg_json) = proxy.get_phonebook_config().await {
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&cfg_json) {
+            let host = v["host"].as_str().unwrap_or("fritz.box").to_string();
+            let username = v["username"].as_str().unwrap_or("").to_string();
+            let phonebook_id = v["phonebook_id"].as_i64().unwrap_or(0) as i32;
+            let has_pwd = v["has_password"].as_bool().unwrap_or(false);
+            let auto_sync = v["auto_sync"].as_bool().unwrap_or(false);
+
+            let _ = qt_thread.queue(move |mut qobj| {
+                qobj.as_mut().set_phonebook_host(QString::from(&host));
+                qobj.as_mut()
+                    .set_phonebook_username(QString::from(&username));
+                qobj.as_mut().set_phonebook_id(phonebook_id);
+                qobj.as_mut().set_phonebook_has_password(has_pwd);
+                qobj.as_mut().set_phonebook_auto_sync(auto_sync);
+            });
+        }
+    }
+}
+
 async fn update_devices(
     proxy: &PlasmaSipDaemonProxy<'_>,
     qt_thread: &cxx_qt::CxxQtThread<qobject::SipUiBridge>,
@@ -1265,6 +1426,50 @@ impl qobject::SipUiBridge {
     pub fn sync_phonebook(self: Pin<&mut Self>) {
         if let Some(ref tx) = self.rust().cmd_tx {
             let _ = tx.send(UiCommand::SyncPhonebook);
+        }
+    }
+
+    pub fn refresh_phonebook_config(self: Pin<&mut Self>) {
+        if let Some(ref tx) = self.rust().cmd_tx {
+            let _ = tx.send(UiCommand::RefreshPhonebookConfig);
+        }
+    }
+
+    pub fn save_phonebook_config(
+        self: Pin<&mut Self>,
+        host: QString,
+        username: QString,
+        password: QString,
+        phonebook_id: i32,
+        auto_sync: bool,
+    ) {
+        if let Some(ref tx) = self.rust().cmd_tx {
+            let _ = tx.send(UiCommand::SavePhonebookConfig {
+                host: host.to_string(),
+                username: username.to_string(),
+                password: password.to_string(),
+                phonebook_id: phonebook_id.max(0) as u32,
+                auto_sync,
+            });
+        }
+    }
+
+    pub fn sync_phonebook_with_config(
+        self: Pin<&mut Self>,
+        host: QString,
+        username: QString,
+        password: QString,
+        phonebook_id: i32,
+        save_credentials: bool,
+    ) {
+        if let Some(ref tx) = self.rust().cmd_tx {
+            let _ = tx.send(UiCommand::SyncPhonebookWithConfig {
+                host: host.to_string(),
+                username: username.to_string(),
+                password: password.to_string(),
+                phonebook_id: phonebook_id.max(0) as u32,
+                save_credentials,
+            });
         }
     }
 

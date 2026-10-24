@@ -79,6 +79,48 @@ Kirigami.Page {
         return results;
     }
 
+    readonly property var audioConfig: {
+        if (!page.bridge || !page.bridge.audio_config_json) return {};
+        try {
+            return JSON.parse(page.bridge.audio_config_json) || {};
+        } catch (e) {
+            return {};
+        }
+    }
+
+    readonly property var audioDevices: {
+        if (!page.bridge || !page.bridge.audio_devices_json) return { inputs: [], outputs: [] };
+        try {
+            return JSON.parse(page.bridge.audio_devices_json) || { inputs: [], outputs: [] };
+        } catch (e) {
+            return { inputs: [], outputs: [] };
+        }
+    }
+
+    readonly property string currentOutputDeviceName: {
+        var devId = audioConfig.output_device_id;
+        var outs = audioDevices.outputs || [];
+        if (!devId || devId === "default") {
+            return outs.length > 0 ? outs[0].name : qsTr("Default Audio");
+        }
+        for (var i = 0; i < outs.length; i++) {
+            if (outs[i].id === devId) return outs[i].name;
+        }
+        return outs.length > 0 ? outs[0].name : qsTr("Default Audio");
+    }
+
+    readonly property string currentInputDeviceName: {
+        var devId = audioConfig.input_device_id;
+        var ins = audioDevices.inputs || [];
+        if (!devId || devId === "default") {
+            return ins.length > 0 ? ins[0].name : qsTr("Default Microphone");
+        }
+        for (var j = 0; j < ins.length; j++) {
+            if (ins[j].id === devId) return ins[j].name;
+        }
+        return ins.length > 0 ? ins[0].name : qsTr("Default Microphone");
+    }
+
     signal startCallRequested(string target)
     signal openAccountsRequested()
 
@@ -93,6 +135,15 @@ Kirigami.Page {
                 if (page.bridge) {
                     page.bridge.set_silent_mode(!page.isSilent);
                 }
+            }
+        },
+        Kirigami.Action {
+            text: qsTr("Audio Devices")
+            icon.name: "audio-headset"
+            tooltip: qsTr("Quick Audio Device & Volume Settings")
+            onTriggered: {
+                if (page.bridge) page.bridge.refresh_devices();
+                audioQuickSheet.open();
             }
         }
     ]
@@ -150,60 +201,119 @@ Kirigami.Page {
         spacing: Kirigami.Units.smallSpacing
 
         // ---------------------------------------------------------------------
-        // 1. Account Status Pill Badge (Polished, interactive header)
+        // 1. Dual Status Badges: Account Status Pill & Quick Audio Selector Pill
         // ---------------------------------------------------------------------
-        Rectangle {
-            id: statusPill
+        RowLayout {
+            id: headerPillsRow
             Layout.alignment: Qt.AlignHCenter
-            implicitHeight: 28
-            implicitWidth: statusRow.implicitWidth + 20
-            radius: 14
-            color: page.bridge && page.bridge.is_registered ?
-                   Qt.rgba(Kirigami.Theme.positiveTextColor.r, Kirigami.Theme.positiveTextColor.g, Kirigami.Theme.positiveTextColor.b, 0.12) :
-                   (page.bridge && page.bridge.account_summary.indexOf("Failed") !== -1 ?
-                    Qt.rgba(Kirigami.Theme.negativeTextColor.r, Kirigami.Theme.negativeTextColor.g, Kirigami.Theme.negativeTextColor.b, 0.12) :
-                    Qt.rgba(Kirigami.Theme.neutralTextColor.r, Kirigami.Theme.neutralTextColor.g, Kirigami.Theme.neutralTextColor.b, 0.10))
-            border.color: page.bridge && page.bridge.is_registered ?
-                          Qt.rgba(Kirigami.Theme.positiveTextColor.r, Kirigami.Theme.positiveTextColor.g, Kirigami.Theme.positiveTextColor.b, 0.35) :
-                          Qt.rgba(Kirigami.Theme.disabledTextColor.r, Kirigami.Theme.disabledTextColor.g, Kirigami.Theme.disabledTextColor.b, 0.25)
-            border.width: 1
+            spacing: Kirigami.Units.mediumSpacing
 
-            MouseArea {
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: page.openAccountsRequested()
-                ToolTip.text: qsTr("Account Settings & Details")
-                ToolTip.visible: containsMouse
+            // Account status badge
+            Rectangle {
+                id: statusPill
+                implicitHeight: 28
+                implicitWidth: statusRow.implicitWidth + 20
+                radius: 14
+                color: page.bridge && page.bridge.is_registered ?
+                       Qt.rgba(Kirigami.Theme.positiveTextColor.r, Kirigami.Theme.positiveTextColor.g, Kirigami.Theme.positiveTextColor.b, 0.12) :
+                       (page.bridge && page.bridge.account_summary.indexOf("Failed") !== -1 ?
+                        Qt.rgba(Kirigami.Theme.negativeTextColor.r, Kirigami.Theme.negativeTextColor.g, Kirigami.Theme.negativeTextColor.b, 0.12) :
+                        Qt.rgba(Kirigami.Theme.neutralTextColor.r, Kirigami.Theme.neutralTextColor.g, Kirigami.Theme.neutralTextColor.b, 0.10))
+                border.color: page.bridge && page.bridge.is_registered ?
+                              Qt.rgba(Kirigami.Theme.positiveTextColor.r, Kirigami.Theme.positiveTextColor.g, Kirigami.Theme.positiveTextColor.b, 0.35) :
+                              Qt.rgba(Kirigami.Theme.disabledTextColor.r, Kirigami.Theme.disabledTextColor.g, Kirigami.Theme.disabledTextColor.b, 0.25)
+                border.width: 1
+
+                MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: page.openAccountsRequested()
+                    ToolTip.text: qsTr("Account Settings & Details")
+                    ToolTip.visible: containsMouse
+                }
+
+                RowLayout {
+                    id: statusRow
+                    anchors.centerIn: parent
+                    spacing: 6
+
+                    Rectangle {
+                        Layout.preferredWidth: 8
+                        Layout.preferredHeight: 8
+                        radius: 4
+                        color: page.bridge && page.bridge.is_registered ? Kirigami.Theme.positiveTextColor :
+                               (page.bridge && page.bridge.account_summary.indexOf("Failed") !== -1 ? Kirigami.Theme.negativeTextColor :
+                                (page.bridge && page.bridge.daemon_connected ? Kirigami.Theme.neutralTextColor : Kirigami.Theme.negativeTextColor))
+                    }
+
+                    Label {
+                        text: page.displayAccountName
+                        font.pointSize: Kirigami.Theme.smallFont.pointSize
+                        font.weight: Font.Medium
+                        color: page.bridge && page.bridge.is_registered ? Kirigami.Theme.textColor : Kirigami.Theme.disabledTextColor
+                    }
+
+                    Label {
+                        visible: page.isSilent
+                        text: "• " + qsTr("Silent")
+                        font.pointSize: Kirigami.Theme.smallFont.pointSize
+                        font.bold: true
+                        color: Kirigami.Theme.neutralTextColor
+                    }
+                }
             }
 
-            RowLayout {
-                id: statusRow
-                anchors.centerIn: parent
-                spacing: 6
+            // Quick Audio Device Pill
+            Rectangle {
+                id: audioPill
+                implicitHeight: 28
+                implicitWidth: audioPillRow.implicitWidth + 20
+                radius: 14
+                color: Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.10)
+                border.color: Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.30)
+                border.width: 1
 
-                Rectangle {
-                    Layout.preferredWidth: 8
-                    Layout.preferredHeight: 8
-                    radius: 4
-                    color: page.bridge && page.bridge.is_registered ? Kirigami.Theme.positiveTextColor :
-                           (page.bridge && page.bridge.account_summary.indexOf("Failed") !== -1 ? Kirigami.Theme.negativeTextColor :
-                            (page.bridge && page.bridge.daemon_connected ? Kirigami.Theme.neutralTextColor : Kirigami.Theme.negativeTextColor))
+                MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        if (page.bridge) page.bridge.refresh_devices();
+                        audioQuickSheet.open();
+                    }
+                    ToolTip.text: qsTr("Audio: %1 (Click to change)").arg(page.currentOutputDeviceName)
+                    ToolTip.visible: containsMouse
                 }
 
-                Label {
-                    text: page.displayAccountName
-                    font.pointSize: Kirigami.Theme.smallFont.pointSize
-                    font.weight: Font.Medium
-                    color: page.bridge && page.bridge.is_registered ? Kirigami.Theme.textColor : Kirigami.Theme.disabledTextColor
-                }
+                RowLayout {
+                    id: audioPillRow
+                    anchors.centerIn: parent
+                    spacing: 6
 
-                Label {
-                    visible: page.isSilent
-                    text: "• " + qsTr("Silent")
-                    font.pointSize: Kirigami.Theme.smallFont.pointSize
-                    font.bold: true
-                    color: Kirigami.Theme.neutralTextColor
+                    Kirigami.Icon {
+                        source: "audio-headset"
+                        implicitWidth: 14
+                        implicitHeight: 14
+                        color: Kirigami.Theme.highlightColor
+                    }
+
+                    Label {
+                        text: {
+                            var n = page.currentOutputDeviceName;
+                            return n.length > 22 ? n.substring(0, 20) + "…" : n;
+                        }
+                        font.pointSize: Kirigami.Theme.smallFont.pointSize
+                        font.weight: Font.Medium
+                        color: Kirigami.Theme.textColor
+                    }
+
+                    Kirigami.Icon {
+                        source: "arrow-down"
+                        implicitWidth: 10
+                        implicitHeight: 10
+                        color: Kirigami.Theme.disabledTextColor
+                    }
                 }
             }
         }
@@ -717,5 +827,194 @@ Kirigami.Page {
         }
 
         Item { Layout.preferredHeight: 8 }
+    }
+
+    // -------------------------------------------------------------------------
+    // Audio Quick Settings Sheet (Instant One-Click Audio Device Switching)
+    // -------------------------------------------------------------------------
+    Kirigami.OverlaySheet {
+        id: audioQuickSheet
+        title: qsTr("Audio Quick Settings")
+        parent: applicationWindow() ? applicationWindow().overlay : null
+        implicitHeight: Math.min(
+            parent ? parent.height - Kirigami.Units.gridUnit * 4 : 520,
+            audioQuickLayout.implicitHeight + Kirigami.Units.gridUnit * 5
+        )
+
+        ColumnLayout {
+            id: audioQuickLayout
+            spacing: Kirigami.Units.largeSpacing
+            implicitWidth: Math.min(page.width - (Kirigami.Units.gridUnit * 2), Kirigami.Units.gridUnit * 24)
+
+            // Output device selector
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: Kirigami.Units.smallSpacing
+
+                RowLayout {
+                    spacing: Kirigami.Units.smallSpacing
+                    Kirigami.Icon {
+                        source: "audio-volume-high"
+                        implicitWidth: 20
+                        implicitHeight: 20
+                        color: Kirigami.Theme.highlightColor
+                    }
+                    Label {
+                        text: qsTr("Speaker / Headset Output:")
+                        font.bold: true
+                    }
+                }
+
+                ComboBox {
+                    id: quickOutputSelector
+                    Layout.fillWidth: true
+                    textRole: "name"
+                    valueRole: "id"
+                    model: (page.audioDevices.outputs && page.audioDevices.outputs.length > 0) ?
+                           page.audioDevices.outputs :
+                           [{ id: "default", name: qsTr("Default System Output") }]
+                    Component.onCompleted: syncIndex()
+                    onModelChanged: syncIndex()
+                    function syncIndex() {
+                        var curId = page.audioConfig.output_device_id || "default";
+                        for (var i = 0; i < count; i++) {
+                            if (model[i].id === curId) {
+                                currentIndex = i;
+                                return;
+                            }
+                        }
+                    }
+                    onActivated: {
+                        applyAudioConfig();
+                    }
+                }
+            }
+
+            // Input device selector
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: Kirigami.Units.smallSpacing
+
+                RowLayout {
+                    spacing: Kirigami.Units.smallSpacing
+                    Kirigami.Icon {
+                        source: "audio-input-microphone"
+                        implicitWidth: 20
+                        implicitHeight: 20
+                        color: Kirigami.Theme.highlightColor
+                    }
+                    Label {
+                        text: qsTr("Microphone Input:")
+                        font.bold: true
+                    }
+                }
+
+                ComboBox {
+                    id: quickInputSelector
+                    Layout.fillWidth: true
+                    textRole: "name"
+                    valueRole: "id"
+                    model: (page.audioDevices.inputs && page.audioDevices.inputs.length > 0) ?
+                           page.audioDevices.inputs :
+                           [{ id: "default", name: qsTr("Default System Microphone") }]
+                    Component.onCompleted: syncIndex()
+                    onModelChanged: syncIndex()
+                    function syncIndex() {
+                        var curId = page.audioConfig.input_device_id || "default";
+                        for (var i = 0; i < count; i++) {
+                            if (model[i].id === curId) {
+                                currentIndex = i;
+                                return;
+                            }
+                        }
+                    }
+                    onActivated: {
+                        applyAudioConfig();
+                    }
+                }
+            }
+
+            Kirigami.Separator { Layout.fillWidth: true }
+
+            // Volume & Silent Mode Quick Controls
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Kirigami.Units.mediumSpacing
+
+                Label {
+                    text: qsTr("Ringer Volume:")
+                    Layout.preferredWidth: Kirigami.Units.gridUnit * 6
+                }
+
+                Slider {
+                    id: quickVolumeSlider
+                    Layout.fillWidth: true
+                    from: 0
+                    to: 100
+                    value: page.audioConfig.ringer_volume !== undefined ? page.audioConfig.ringer_volume : 80
+                    onMoved: {
+                        applyAudioConfig();
+                    }
+                }
+
+                Label {
+                    text: Math.round(quickVolumeSlider.value) + "%"
+                    Layout.preferredWidth: Kirigami.Units.gridUnit * 2
+                    horizontalAlignment: Text.AlignRight
+                }
+            }
+
+            // Action Buttons (Test sound, Close)
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Kirigami.Units.smallSpacing
+
+                Button {
+                    id: testSoundBtn
+                    property bool testSoundPlaying: false
+                    text: testSoundPlaying ? qsTr("Stop Test") : qsTr("Test Sound")
+                    icon.name: testSoundPlaying ? "media-playback-stop" : "media-playback-start"
+                    onClicked: {
+                        if (!page.bridge) return;
+                        if (testSoundPlaying) {
+                            page.bridge.stop_test_ringtone();
+                            testSoundPlaying = false;
+                        } else {
+                            var r = page.audioConfig.ringtone || "standard";
+                            var p = page.audioConfig.custom_ringtone_path || "";
+                            page.bridge.test_ringtone(r, p, quickVolumeSlider.value);
+                            testSoundPlaying = true;
+                        }
+                    }
+                }
+
+                Item { Layout.fillWidth: true }
+
+                Button {
+                    text: qsTr("Done")
+                    icon.name: "dialog-ok"
+                    highlighted: true
+                    onClicked: {
+                        if (testSoundBtn.testSoundPlaying && page.bridge) {
+                            page.bridge.stop_test_ringtone();
+                            testSoundBtn.testSoundPlaying = false;
+                        }
+                        audioQuickSheet.close();
+                    }
+                }
+            }
+        }
+
+        function applyAudioConfig() {
+            if (!page.bridge) return;
+            var outId = quickOutputSelector.currentValue || "default";
+            var inId = quickInputSelector.currentValue || "default";
+            var ringId = page.audioConfig.ringing_device_id || "default";
+            var isSil = page.isSilent;
+            var r = page.audioConfig.ringtone || "standard";
+            var cp = page.audioConfig.custom_ringtone_path || "";
+            var vol = Math.round(quickVolumeSlider.value);
+            page.bridge.save_audio_config(inId, outId, ringId, isSil, r, cp, vol);
+        }
     }
 }

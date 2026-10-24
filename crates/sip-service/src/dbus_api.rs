@@ -445,14 +445,96 @@ impl PlasmaSipDbusService {
     }
 
     /// Synchronize contacts from AVM FRITZ!Box TR-064 interface
-    async fn sync_phonebook(&self) -> String {
+    async fn sync_phonebook(
+        &self,
+        #[zbus(signal_emitter)] emitter: zbus::object_server::SignalEmitter<'_>,
+    ) -> String {
         match self.do_sync_phonebook().await {
-            Ok(count) => serde_json::json!({
-                "success": true,
-                "count": count,
-                "error": null
+            Ok(count) => {
+                let _ = Self::contacts_changed(&emitter).await;
+                serde_json::json!({
+                    "success": true,
+                    "count": count,
+                    "error": null
+                })
+                .to_string()
+            }
+            Err(e) => serde_json::json!({
+                "success": false,
+                "count": 0,
+                "error": e.to_string()
             })
             .to_string(),
+        }
+    }
+
+    /// Retrieve FRITZ!Box phonebook configuration
+    async fn get_phonebook_config(&self) -> String {
+        let cfg = self.storage.get_phonebook_config().unwrap_or_default();
+        let has_pwd = self.storage.has_phonebook_secret().unwrap_or(false);
+        serde_json::json!({
+            "host": cfg.host,
+            "username": cfg.username,
+            "phonebook_id": cfg.phonebook_id,
+            "has_password": has_pwd,
+            "auto_sync": cfg.auto_sync,
+        })
+        .to_string()
+    }
+
+    /// Save FRITZ!Box phonebook configuration and optional password
+    async fn save_phonebook_config(
+        &self,
+        host: &str,
+        username: &str,
+        password: &str,
+        phonebook_id: u32,
+        auto_sync: bool,
+    ) -> String {
+        let cfg = sip_domain::FritzBoxPhonebookConfig {
+            host: if host.trim().is_empty() {
+                "fritz.box".to_string()
+            } else {
+                host.trim().to_string()
+            },
+            username: username.trim().to_string(),
+            phonebook_id,
+            auto_sync,
+        };
+        if let Err(e) = self.storage.save_phonebook_config(&cfg) {
+            return format!("Error saving phonebook config: {}", e);
+        }
+        if !password.is_empty() {
+            if let Err(e) = self.storage.save_phonebook_secret(password) {
+                return format!("Error saving phonebook password: {}", e);
+            }
+        }
+        "OK".into()
+    }
+
+    /// Synchronize contacts with explicitly provided configuration and optional password
+    async fn sync_phonebook_with_config(
+        &self,
+        #[zbus(signal_emitter)] emitter: zbus::object_server::SignalEmitter<'_>,
+        host: &str,
+        username: &str,
+        password: &str,
+        phonebook_id: u32,
+        save_credentials: bool,
+    ) -> String {
+        match self
+            .do_sync_phonebook_with_config(host, username, password, phonebook_id, save_credentials)
+            .await
+        {
+            Ok(count) => {
+                let _ = Self::contacts_changed(&emitter).await;
+                serde_json::json!({
+                    "success": true,
+                    "count": count,
+                    "error": null
+                })
+                .to_string()
+            }
             Err(e) => serde_json::json!({
                 "success": false,
                 "count": 0,
@@ -597,8 +679,88 @@ impl PlasmaSipDbusService {
         })
     }
 
+    /// Synchronizes phonebook contacts using explicit parameters
+    pub async fn do_sync_phonebook_with_config(
+        &self,
+        host: &str,
+        username: &str,
+        password: &str,
+        phonebook_id: u32,
+        save_credentials: bool,
+    ) -> Result<usize, String> {
+        let effective_host = if host.trim().is_empty() {
+            "fritz.box"
+        } else {
+            host.trim()
+        };
+        let effective_user = username.trim();
+        let effective_pwd = if password.is_empty() {
+            self.storage
+                .get_phonebook_secret()
+                .map_err(|e| e.to_string())?
+                .ok_or_else(|| "No stored password found for FRITZ!Box phonebook.".to_string())?
+        } else {
+            password.to_string()
+        };
+
+        if effective_user.is_empty() {
+            return Err(
+                "FRITZ!Box username cannot be empty. Please enter your router username.".into(),
+            );
+        }
+
+        let client = sip_providers::FritzBoxTr064Client::new(effective_host, 49000);
+        let contacts = client
+            .fetch_phonebook(effective_user, &effective_pwd, phonebook_id)
+            .await
+            .map_err(|e| format!("FRITZ!Box TR-064 sync failed: {}", e))?;
+
+        let count = contacts.len();
+        self.storage
+            .clear_fritzbox_contacts()
+            .map_err(|e| e.to_string())?;
+        self.storage
+            .upsert_contacts(&contacts)
+            .map_err(|e| e.to_string())?;
+
+        if save_credentials {
+            let cfg = sip_domain::FritzBoxPhonebookConfig {
+                host: effective_host.to_string(),
+                username: effective_user.to_string(),
+                phonebook_id,
+                auto_sync: false,
+            };
+            let _ = self.storage.save_phonebook_config(&cfg);
+            let _ = self.storage.save_phonebook_secret(&effective_pwd);
+        }
+
+        tracing::info!(
+            "Successfully synchronized {} contacts from FRITZ!Box phonebook",
+            count
+        );
+        Ok(count)
+    }
+
     /// Synchronizes phonebook contacts from the configured AVM FRITZ!Box router.
     pub async fn do_sync_phonebook(&self) -> Result<usize, String> {
+        // 1. Check if dedicated FRITZ!Box phonebook config and password exist
+        if let Ok(pb_cfg) = self.storage.get_phonebook_config() {
+            if let Ok(Some(secret)) = self.storage.get_phonebook_secret() {
+                if !pb_cfg.username.is_empty() && !secret.is_empty() {
+                    return self
+                        .do_sync_phonebook_with_config(
+                            &pb_cfg.host,
+                            &pb_cfg.username,
+                            &secret,
+                            pb_cfg.phonebook_id,
+                            false,
+                        )
+                        .await;
+                }
+            }
+        }
+
+        // 2. Fall back to finding a FRITZ!Box SIP account
         let accounts = self.storage.list_accounts().map_err(|e| e.to_string())?;
         let fb_account = accounts
             .into_iter()
@@ -608,7 +770,7 @@ impl PlasmaSipDbusService {
                     || a.name.to_lowercase().contains("fritz")
             })
             .ok_or_else(|| {
-                "No AVM FRITZ!Box SIP account found. Please configure your FRITZ!Box account first."
+                "No FRITZ!Box phonebook credentials configured. Please enter your FRITZ!Box user and password under Settings or in the Contacts view."
                     .to_string()
             })?;
 
@@ -624,24 +786,7 @@ impl PlasmaSipDbusService {
             &fb_account.domain
         };
 
-        let client = sip_providers::FritzBoxTr064Client::new(host, 49000);
-        let contacts = client
-            .fetch_phonebook(&fb_account.username, &password, 0)
+        self.do_sync_phonebook_with_config(host, &fb_account.username, &password, 0, false)
             .await
-            .map_err(|e| format!("FRITZ!Box TR-064 sync failed: {}", e))?;
-
-        let count = contacts.len();
-        self.storage
-            .clear_fritzbox_contacts()
-            .map_err(|e| e.to_string())?;
-        self.storage
-            .upsert_contacts(&contacts)
-            .map_err(|e| e.to_string())?;
-
-        tracing::info!(
-            "Successfully synchronized {} contacts from FRITZ!Box phonebook",
-            count
-        );
-        Ok(count)
     }
 }

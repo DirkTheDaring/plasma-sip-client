@@ -130,7 +130,9 @@ fn print_usage() {
     println!("  history [limit]                  Show recent call history");
     println!("  devices                          List audio input and output devices");
     println!("  contacts [query]                 List contacts or search by name/number");
-    println!("  sync-phonebook                   Synchronize phonebook from FRITZ!Box");
+    println!(
+        "  sync-phonebook [options]         Synchronize phonebook (--user, --password, --host, --save)"
+    );
     println!("  help                             Display this help message");
 }
 
@@ -266,9 +268,74 @@ async fn run_cli(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
             println!("Contacts:\n{}", reply);
         }
         "sync-phonebook" => {
+            let mut host = "fritz.box".to_string();
+            let mut user = String::new();
+            let mut pass = String::new();
+            let mut pb_id = 0u32;
+            let mut save = false;
+
+            let mut iter = args[2..].iter().peekable();
+            while let Some(arg) = iter.next() {
+                match arg.as_str() {
+                    "--host" => {
+                        if let Some(val) = iter.next() {
+                            host = val.clone();
+                        }
+                    }
+                    "--user" | "-u" => {
+                        if let Some(val) = iter.next() {
+                            user = val.clone();
+                        }
+                    }
+                    "--password" | "-p" => {
+                        if let Some(val) = iter.next() {
+                            pass = val.clone();
+                        }
+                    }
+                    "--id" => {
+                        if let Some(val) = iter.next() {
+                            pb_id = val.parse().unwrap_or(0);
+                        }
+                    }
+                    "--save" => {
+                        save = true;
+                    }
+                    "--help" | "-h" => {
+                        println!("Usage: plasma-sip sync-phonebook [options]");
+                        println!();
+                        println!("Synchronize phonebook from AVM FRITZ!Box or PBX via TR-064");
+                        println!();
+                        println!("Options:");
+                        println!("  --user, -u <username>     FRITZ!Box router username");
+                        println!("  --password, -p <password> FRITZ!Box router password");
+                        println!(
+                            "  --host <hostname/IP>      Router hostname or IP (default: fritz.box)"
+                        );
+                        println!("  --id <number>             Phonebook ID (default: 0)");
+                        println!(
+                            "  --save                    Save these credentials to KDE Wallet / encrypted storage"
+                        );
+                        println!("  --help, -h                Show this help message");
+                        return Ok(());
+                    }
+                    _ => {}
+                }
+            }
+
             println!("Synchronizing phonebook with PBX / FRITZ!Box...");
-            let reply: String = conn
-                .call_method(
+            let reply: String = if !user.is_empty() {
+                conn.call_method(
+                    Some("org.kde.PlasmaSip"),
+                    "/org/kde/PlasmaSip",
+                    Some("org.kde.PlasmaSip"),
+                    "SyncPhonebookWithConfig",
+                    &(host, user, pass, pb_id, save),
+                )
+                .await?
+                .body()
+                .deserialize()?
+            } else {
+                conn.call_method(
                     Some("org.kde.PlasmaSip"),
                     "/org/kde/PlasmaSip",
                     Some("org.kde.PlasmaSip"),
@@ -277,8 +344,21 @@ async fn run_cli(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
                 )
                 .await?
                 .body()
-                .deserialize()?;
-            println!("Sync result: {}", reply);
+                .deserialize()?
+            };
+
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&reply) {
+                if v["success"].as_bool().unwrap_or(false) {
+                    println!("Phonebook synchronized: {} contacts imported.", v["count"]);
+                } else {
+                    eprintln!(
+                        "Error synchronizing phonebook: {}",
+                        v["error"].as_str().unwrap_or("unknown error")
+                    );
+                }
+            } else {
+                println!("Sync result: {}", reply);
+            }
         }
         "status" => {
             let reply: String = conn

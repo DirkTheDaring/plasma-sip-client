@@ -184,6 +184,26 @@ pub fn char_to_t9(c: char) -> Option<char> {
     }
 }
 
+/// Configuration for AVM FRITZ!Box TR-064 phonebook synchronization.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FritzBoxPhonebookConfig {
+    pub host: String,
+    pub username: String,
+    pub phonebook_id: u32,
+    pub auto_sync: bool,
+}
+
+impl Default for FritzBoxPhonebookConfig {
+    fn default() -> Self {
+        Self {
+            host: "fritz.box".to_string(),
+            username: String::new(),
+            phonebook_id: 0,
+            auto_sync: false,
+        }
+    }
+}
+
 /// Converts a text string into its T9 numeric equivalent.
 pub fn text_to_t9(text: &str) -> String {
     text.chars().filter_map(char_to_t9).collect()

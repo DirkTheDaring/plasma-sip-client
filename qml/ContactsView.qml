@@ -96,8 +96,24 @@ Kirigami.Page {
                     page.bridge.sync_phonebook();
                 }
             }
+        },
+        Kirigami.Action {
+            text: qsTr("Phonebook Settings")
+            icon.name: "configure"
+            tooltip: qsTr("Configure FRITZ!Box router credentials & phonebook ID")
+            onTriggered: {
+                if (page.bridge) page.bridge.refresh_phonebook_config();
+                phonebookSetupSheet.open();
+            }
         }
     ]
+
+    Component.onCompleted: {
+        if (Qt.application.arguments.indexOf("--test-launch") !== -1) {
+            phonebookSetupSheet.open();
+            phonebookSetupSheet.close();
+        }
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -127,6 +143,18 @@ Kirigami.Page {
                 enabled: page.bridge && !page.bridge.is_syncing_contacts
                 onClicked: {
                     if (page.bridge) page.bridge.sync_phonebook();
+                }
+            }
+
+            ToolButton {
+                icon.name: "configure"
+                text: qsTr("Settings")
+                display: AbstractButton.IconOnly
+                ToolTip.text: qsTr("Configure FRITZ!Box Phonebook Credentials")
+                ToolTip.visible: hovered
+                onClicked: {
+                    if (page.bridge) page.bridge.refresh_phonebook_config();
+                    phonebookSetupSheet.open();
                 }
             }
         }
@@ -202,19 +230,29 @@ Kirigami.Page {
             Layout.fillWidth: true
             Layout.fillHeight: true
             visible: page.rawContactsList.length === 0
-            icon.name: "address-book-new"
-            text: searchField.text.trim().length > 0 ? qsTr("No matching contacts") : qsTr("No Contacts Found")
+            icon.name: page.bridge && !page.bridge.phonebook_has_password && searchField.text.trim().length === 0 ? "configure" : "address-book-new"
+            text: searchField.text.trim().length > 0 ? qsTr("No matching contacts") :
+                  (page.bridge && !page.bridge.phonebook_has_password ? qsTr("FRITZ!Box Phonebook Not Configured") : qsTr("No Contacts Found"))
             explanation: searchField.text.trim().length > 0 ?
                          qsTr("Try searching with different terms or check spelling.") :
-                         qsTr("Synchronize your phonebook from your AVM FRITZ!Box or PBX to quickly search and dial.")
+                         (page.bridge && !page.bridge.phonebook_has_password ?
+                          qsTr("Configure your FRITZ!Box login credentials to synchronize contacts, internal extensions, and speed dials via TR-064.") :
+                          qsTr("Synchronize your phonebook from your AVM FRITZ!Box or PBX to quickly search and dial."))
 
             helpfulAction: Kirigami.Action {
-                text: qsTr("Synchronize from FRITZ!Box")
-                icon.name: "view-refresh"
+                text: (page.bridge && !page.bridge.phonebook_has_password && searchField.text.trim().length === 0) ?
+                      qsTr("Set Up Credentials") : qsTr("Synchronize from FRITZ!Box")
+                icon.name: (page.bridge && !page.bridge.phonebook_has_password && searchField.text.trim().length === 0) ?
+                           "configure" : "view-refresh"
                 visible: searchField.text.trim().length === 0
                 enabled: page.bridge && !page.bridge.is_syncing_contacts
                 onTriggered: {
-                    if (page.bridge) page.bridge.sync_phonebook();
+                    if (page.bridge && !page.bridge.phonebook_has_password) {
+                        page.bridge.refresh_phonebook_config();
+                        phonebookSetupSheet.open();
+                    } else if (page.bridge) {
+                        page.bridge.sync_phonebook();
+                    }
                 }
             }
         }
@@ -405,6 +443,237 @@ Kirigami.Page {
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+
+    // Modal Sheet for FRITZ!Box Phonebook Credentials & Setup
+    Kirigami.OverlaySheet {
+        id: phonebookSetupSheet
+        title: qsTr("FRITZ!Box Phonebook Credentials")
+        parent: applicationWindow() ? applicationWindow().overlay : null
+        implicitHeight: Math.min(
+            parent ? parent.height - Kirigami.Units.gridUnit * 4 : 560,
+            phonebookSetupLayout.implicitHeight + Kirigami.Units.gridUnit * 5
+        )
+
+        onVisibleChanged: {
+            if (visible && page.bridge) {
+                fbHostField.text = page.bridge.phonebook_host || "fritz.box";
+                fbUserField.text = page.bridge.phonebook_username || "";
+                fbPasswordField.text = "";
+                fbIdSpin.value = page.bridge.phonebook_id || 0;
+                fbAutoSyncCheck.checked = page.bridge.phonebook_auto_sync;
+            }
+        }
+
+        ColumnLayout {
+            id: phonebookSetupLayout
+            spacing: Kirigami.Units.mediumSpacing
+            implicitWidth: Math.min(page.width - (Kirigami.Units.gridUnit * 2), Kirigami.Units.gridUnit * 24)
+
+            // Info Card
+            Rectangle {
+                Layout.fillWidth: true
+                implicitHeight: infoRow.implicitHeight + 16
+                radius: 8
+                color: Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.08)
+                border.color: Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.25)
+                border.width: 1
+
+                RowLayout {
+                    id: infoRow
+                    anchors.fill: parent
+                    anchors.margins: 10
+                    spacing: Kirigami.Units.mediumSpacing
+
+                    Kirigami.Icon {
+                        source: "security-high"
+                        implicitWidth: 24
+                        implicitHeight: 24
+                        color: Kirigami.Theme.highlightColor
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        text: qsTr("AVM FRITZ!Box phonebooks require your router web login (TR-064 on port 49000). Passwords are encrypted in your local KDE Wallet / Secret Service.")
+                        font.pointSize: Kirigami.Theme.smallFont.pointSize
+                        color: Kirigami.Theme.textColor
+                    }
+                }
+            }
+
+            Kirigami.FormLayout {
+                Layout.fillWidth: true
+
+                TextField {
+                    id: fbHostField
+                    Kirigami.FormData.label: qsTr("Router Host / IP:")
+                    text: page.bridge ? page.bridge.phonebook_host : "fritz.box"
+                    placeholderText: "fritz.box or 192.168.178.1"
+                    Layout.fillWidth: true
+                }
+
+                TextField {
+                    id: fbUserField
+                    Kirigami.FormData.label: qsTr("Username:")
+                    text: page.bridge ? page.bridge.phonebook_username : ""
+                    placeholderText: "admin or FRITZ!Box user"
+                    Layout.fillWidth: true
+                }
+
+                RowLayout {
+                    Kirigami.FormData.label: qsTr("Password:")
+                    Layout.fillWidth: true
+                    spacing: Kirigami.Units.smallSpacing
+
+                    TextField {
+                        id: fbPasswordField
+                        Layout.fillWidth: true
+                        echoMode: showFbPwdBtn.checked ? TextInput.Normal : TextInput.Password
+                        placeholderText: page.bridge && page.bridge.phonebook_has_password ?
+                                         qsTr("Saved in KDE Wallet (leave blank to keep)") :
+                                         qsTr("FRITZ!Box password")
+                    }
+
+                    ToolButton {
+                        id: showFbPwdBtn
+                        checkable: true
+                        icon.name: checked ? "view-hidden" : "view-visible"
+                        ToolTip.text: checked ? qsTr("Hide password") : qsTr("Show password")
+                        ToolTip.visible: hovered
+                        focusPolicy: Qt.NoFocus
+                    }
+                }
+
+                RowLayout {
+                    Kirigami.FormData.label: qsTr("Phonebook ID:")
+                    Layout.fillWidth: true
+                    spacing: Kirigami.Units.smallSpacing
+
+                    SpinBox {
+                        id: fbIdSpin
+                        from: 0
+                        to: 20
+                        value: page.bridge ? page.bridge.phonebook_id : 0
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        text: qsTr("(0 = Default / Main phonebook)")
+                        font.pointSize: Kirigami.Theme.smallFont.pointSize
+                        color: Kirigami.Theme.disabledTextColor
+                    }
+                }
+
+                CheckBox {
+                    id: fbAutoSyncCheck
+                    Kirigami.FormData.label: qsTr("Auto-Sync:")
+                    text: qsTr("Synchronize automatically on application startup")
+                    checked: page.bridge ? page.bridge.phonebook_auto_sync : false
+                }
+            }
+
+            // Sync Status feedback
+            Rectangle {
+                Layout.fillWidth: true
+                implicitHeight: syncFeedbackRow.implicitHeight + 10
+                radius: 6
+                visible: (page.bridge && page.bridge.is_syncing_contacts) || (page.bridge && page.bridge.contact_sync_status !== "")
+                color: page.bridge && page.bridge.is_syncing_contacts ?
+                       Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.12) :
+                       (page.bridge && (page.bridge.contact_sync_status.indexOf("failed") !== -1 || page.bridge.contact_sync_status.indexOf("Error") !== -1) ?
+                        Qt.rgba(Kirigami.Theme.negativeTextColor.r, Kirigami.Theme.negativeTextColor.g, Kirigami.Theme.negativeTextColor.b, 0.12) :
+                        Qt.rgba(Kirigami.Theme.positiveTextColor.r, Kirigami.Theme.positiveTextColor.g, Kirigami.Theme.positiveTextColor.b, 0.12))
+
+                RowLayout {
+                    id: syncFeedbackRow
+                    anchors.fill: parent
+                    anchors.margins: 6
+                    spacing: Kirigami.Units.smallSpacing
+
+                    BusyIndicator {
+                        running: page.bridge && page.bridge.is_syncing_contacts
+                        visible: running
+                        Layout.preferredWidth: 18
+                        Layout.preferredHeight: 18
+                    }
+
+                    Kirigami.Icon {
+                        source: page.bridge && (page.bridge.contact_sync_status.indexOf("failed") !== -1 || page.bridge.contact_sync_status.indexOf("Error") !== -1) ?
+                                "dialog-warning" : "dialog-information"
+                        visible: page.bridge && !page.bridge.is_syncing_contacts
+                        implicitWidth: 16
+                        implicitHeight: 16
+                        color: page.bridge && (page.bridge.contact_sync_status.indexOf("failed") !== -1 || page.bridge.contact_sync_status.indexOf("Error") !== -1) ?
+                               Kirigami.Theme.negativeTextColor : Kirigami.Theme.positiveTextColor
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        text: page.bridge ? page.bridge.contact_sync_status : ""
+                        font.pointSize: Kirigami.Theme.smallFont.pointSize
+                        elide: Text.ElideRight
+                        color: Kirigami.Theme.textColor
+                    }
+                }
+            }
+
+            // Buttons
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Kirigami.Units.smallSpacing
+
+                Button {
+                    text: qsTr("Save & Sync Now")
+                    icon.name: "view-refresh"
+                    highlighted: true
+                    enabled: page.bridge && !page.bridge.is_syncing_contacts
+                    onClicked: {
+                        if (page.bridge) {
+                            page.bridge.save_phonebook_config(
+                                fbHostField.text.trim(),
+                                fbUserField.text.trim(),
+                                fbPasswordField.text,
+                                fbIdSpin.value,
+                                fbAutoSyncCheck.checked
+                            );
+                            page.bridge.sync_phonebook_with_config(
+                                fbHostField.text.trim(),
+                                fbUserField.text.trim(),
+                                fbPasswordField.text,
+                                fbIdSpin.value,
+                                true
+                            );
+                        }
+                    }
+                }
+
+                Button {
+                    text: qsTr("Save Only")
+                    icon.name: "document-save"
+                    onClicked: {
+                        if (page.bridge) {
+                            page.bridge.save_phonebook_config(
+                                fbHostField.text.trim(),
+                                fbUserField.text.trim(),
+                                fbPasswordField.text,
+                                fbIdSpin.value,
+                                fbAutoSyncCheck.checked
+                            );
+                        }
+                        phonebookSetupSheet.close();
+                    }
+                }
+
+                Item { Layout.fillWidth: true }
+
+                Button {
+                    text: qsTr("Close")
+                    icon.name: "dialog-close"
+                    onClicked: phonebookSetupSheet.close()
                 }
             }
         }
