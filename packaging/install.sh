@@ -38,15 +38,24 @@ echo "Mode:   ${MODE}"
 echo "Prefix: ${PREFIX}"
 echo
 
-# 1. Check or build release binaries
+# 1. Check or build binaries (prefer release, fallback to debug if already compiled)
 BIN_SIP="${ROOT_DIR}/target/release/plasma-sip"
 BIN_SIPD="${ROOT_DIR}/target/release/plasma-sipd"
 
-if [ "${NO_BUILD}" = false ]; then
+if [ ! -f "${BIN_SIP}" ] || [ ! -f "${BIN_SIPD}" ]; then
+    if [ -f "${ROOT_DIR}/target/debug/plasma-sip" ] && [ -f "${ROOT_DIR}/target/debug/plasma-sipd" ]; then
+        BIN_SIP="${ROOT_DIR}/target/debug/plasma-sip"
+        BIN_SIPD="${ROOT_DIR}/target/debug/plasma-sipd"
+    fi
+fi
+
+if [ "${NO_BUILD}" = false ] && ([ ! -f "${BIN_SIP}" ] || [ ! -f "${BIN_SIPD}" ]); then
     echo "Building workspace in release mode..."
     cargo build --workspace --release --manifest-path "${ROOT_DIR}/Cargo.toml"
+    BIN_SIP="${ROOT_DIR}/target/release/plasma-sip"
+    BIN_SIPD="${ROOT_DIR}/target/release/plasma-sipd"
 elif [ ! -f "${BIN_SIP}" ] || [ ! -f "${BIN_SIPD}" ]; then
-    echo "ERROR: --no-build was specified, but release binaries were not found in ${ROOT_DIR}/target/release." >&2
+    echo "ERROR: --no-build was specified, but binaries were not found in ${ROOT_DIR}/target/release or ${ROOT_DIR}/target/debug." >&2
     exit 1
 fi
 

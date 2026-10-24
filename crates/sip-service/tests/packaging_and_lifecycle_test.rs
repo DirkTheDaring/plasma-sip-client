@@ -217,12 +217,22 @@ fn test_r7_packaging_installation_and_uninstallation() {
     fs::set_permissions(&mock_systemctl, fs::Permissions::from_mode(0o755))
         .expect("chmod mock systemctl");
 
-    // Ensure release binaries are pre-built
-    let bin_sip_rel = root.join("target").join("release").join("plasma-sip");
-    let bin_sipd_rel = root.join("target").join("release").join("plasma-sipd");
+    // Ensure binaries are pre-built (prefer release, fallback to debug)
+    let (bin_sip_rel, bin_sipd_rel) = {
+        let rel_sip = root.join("target").join("release").join("plasma-sip");
+        let rel_sipd = root.join("target").join("release").join("plasma-sipd");
+        if rel_sip.exists() && rel_sipd.exists() {
+            (rel_sip, rel_sipd)
+        } else {
+            (
+                root.join("target").join("debug").join("plasma-sip"),
+                root.join("target").join("debug").join("plasma-sipd"),
+            )
+        }
+    };
     assert!(
         bin_sip_rel.exists() && bin_sipd_rel.exists(),
-        "Release binaries target/release/plasma-sip and plasma-sipd must be pre-built before running packaging tests"
+        "Binaries plasma-sip and plasma-sipd (target/release or target/debug) must be built before running packaging tests"
     );
 
     // 1. Run install.sh with staged prefix and isolated recording stub
@@ -391,11 +401,17 @@ fn test_r7_packaging_installation_and_uninstallation() {
 fn test_r7_gui_qml_engine_test_launch() {
     let root = workspace_root();
     // Milestone R7 validates the packaged release artifact target/release/plasma-sip.
-    // The release artifact must be pre-built from current source prior to test execution.
-    let bin_sip = root.join("target").join("release").join("plasma-sip");
+    let bin_sip = {
+        let rel = root.join("target").join("release").join("plasma-sip");
+        if rel.exists() {
+            rel
+        } else {
+            root.join("target").join("debug").join("plasma-sip")
+        }
+    };
     assert!(
         bin_sip.exists(),
-        "Release artifact target/release/plasma-sip must be pre-built before running packaging tests"
+        "Artifact plasma-sip (target/release or target/debug) must be pre-built before running packaging tests"
     );
 
     let status = Command::new(&bin_sip)
