@@ -1,0 +1,300 @@
+name: Release Builds
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  discover:
+    name: Fedora Release Discovery & Tag Validation
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.resolve-matrix.outputs.matrix }}
+      latest_stable: ${{ steps.resolve-matrix.outputs.latest_stable }}
+      source_url: ${{ steps.resolve-matrix.outputs.source_url }}
+      tag_version: ${{ steps.validate-tag.outputs.tag_version }}
+      rpm_version: ${{ steps.validate-tag.outputs.rpm_version }}
+      rpm_release: ${{ steps.validate-tag.outputs.rpm_release }}
+      source_sha: ${{ github.sha }}
+    steps:
+      - name: Checkout exact tagged commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Verify checked-out source commit
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          echo "Expected commit SHA: $EXPECTED_SHA"
+          echo "Actual checkout SHA: $actual_sha"
+          if [ "$actual_sha" != "$EXPECTED_SHA" ]; then
+            echo "::error::Checked out commit $actual_sha does not match expected source commit $EXPECTED_SHA"
+            exit 1
+          fi
+
+      - name: Validate Semantic Version Tag Format and Cargo Manifest
+        id: validate-tag
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          python3 .github/scripts/validate_tag.py
+
+      - name: Resolve Dynamic Fedora Matrix
+        id: resolve-matrix
+        run: |
+          python3 .github/scripts/discover_fedora.py
+
+      - name: Generate Discovery Workflow Summary
+        env:
+          SOURCE_URL: ${{ steps.resolve-matrix.outputs.source_url }}
+          LATEST_STABLE: ${{ steps.resolve-matrix.outputs.latest_stable }}
+          MATRIX_JSON: ${{ steps.resolve-matrix.outputs.matrix }}
+          TAG_VERSION: ${{ steps.validate-tag.outputs.tag_version }}
+          RPM_VERSION: ${{ steps.validate-tag.outputs.rpm_version }}
+          RPM_RELEASE: ${{ steps.validate-tag.outputs.rpm_release }}
+          REF_NAME: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          cat <<EOF >> "$GITHUB_STEP_SUMMARY"
+          ## Plasma SIP Release Build — Fedora Matrix Discovery
+
+          | Parameter | Value |
+          | :--- | :--- |
+          | **Pushed Tag** | \`$REF_NAME\` |
+          | **Validated SemVer** | \`$TAG_VERSION\` |
+          | **RPM Package Version** | \`$RPM_VERSION\` |
+          | **RPM Package Release** | \`$RPM_RELEASE\` |
+          | **Source Commit SHA** | \`$SHA\` |
+          | **Authoritative Source** | [$SOURCE_URL]($SOURCE_URL) |
+          | **Latest Stable Fedora (N)** | Fedora **$LATEST_STABLE** |
+          | **Resolved Build Matrix** | \`$MATRIX_JSON\` |
+          | **Application Support Policy** | Rolling 3-version window: latest stable N, N−1, and N−2 |
+          | **Trigger Constraint** | Release tags only (ordinary commits do not produce release builds) |
+          EOF
+
+  build-rpm:
+    name: Build Fedora ${{ matrix.fedora_version }} RPM (x86_64)
+    needs: discover
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        fedora_version: ${{ fromJson(needs.discover.outputs.matrix) }}
+    container:
+      image: registry.fedoraproject.org/fedora:${{ matrix.fedora_version }}
+
+    steps:
+      - name: Configure Repositories & Install Build Dependencies
+        env:
+          FEDORA_VER: ${{ matrix.fedora_version }}
+          ARCH: x86_64
+        run: |
+          set -euo pipefail
+          echo "==> Verifying repository access for Fedora $FEDORA_VER..."
+
+          # Capture actual dnf check-update exit status without loss through shell negation
+          set +e
+          dnf check-update >/dev/null 2>&1
+          dnf_status=$?
+          set -e
+
+          echo "dnf check-update exit status: $dnf_status"
+          # Exit status 0 = no updates available, 100 = updates available
+          if [ "$dnf_status" -eq 0 ] || [ "$dnf_status" -eq 100 ]; then
+            echo "Standard Fedora repositories verified functional."
+          else
+            echo "Standard repositories returned status $dnf_status. Checking official archive availability..."
+            archive_base="https://archives.fedoraproject.org/pub/archive/fedora/linux/releases/${FEDORA_VER}/Everything/${ARCH}/os/"
+            if curl -sI -f "$archive_base" >/dev/null 2>&1; then
+              echo "Configuring verified official archive repositories with preserved GPG verification..."
+              cat <<REPO_EOF > /etc/yum.repos.d/fedora.repo
+          [fedora]
+          name=Fedora \$releasever - \$basearch - Archive
+          baseurl=https://archives.fedoraproject.org/pub/archive/fedora/linux/releases/\$releasever/Everything/\$basearch/os/
+          enabled=1
+          repo_gpgcheck=0
+          type=rpm
+          gpgcheck=1
+          gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-fedora-\$releasever-\$basearch
+          skip_if_unavailable=False
+          REPO_EOF
+              cat <<REPO_EOF > /etc/yum.repos.d/fedora-updates.repo
+          [updates]
+          name=Fedora \$releasever - \$basearch - Updates Archive
+          baseurl=https://archives.fedoraproject.org/pub/archive/fedora/linux/updates/\$releasever/Everything/\$basearch/
+          enabled=1
+          repo_gpgcheck=0
+          type=rpm
+          gpgcheck=1
+          gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-fedora-\$releasever-\$basearch
+          skip_if_unavailable=False
+          REPO_EOF
+              rm -f /etc/yum.repos.d/fedora-cisco-openh264.repo /etc/yum.repos.d/fedora-updates-testing.repo
+              dnf clean all
+              dnf makecache
+            else
+              echo "::error::Standard repositories failed (status $dnf_status) and official archive URL is unreachable: $archive_base"
+              exit 1
+            fi
+          fi
+
+          echo "==> Installing packaging toolchain and compile dependencies..."
+          dnf install -y --setopt=install_weak_deps=False \
+            rpm-build \
+            make \
+            tar \
+            cargo \
+            rust \
+            gcc-c++ \
+            qt6-qtbase-devel \
+            qt6-qtbase-gui \
+            qt6-qtdeclarative-devel \
+            systemd-rpm-macros \
+            desktop-file-utils \
+            "pkgconfig(alsa)" \
+            "pkgconfig(libpipewire-0.3)" \
+            git-core \
+            ca-certificates \
+            diffutils \
+            coreutils \
+            findutils
+
+      - name: Checkout exact tagged commit in container
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ needs.discover.outputs.source_sha }}
+
+      - name: Verify checked-out source commit in container
+        env:
+          EXPECTED_SHA: ${{ needs.discover.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          echo "Expected commit SHA: $EXPECTED_SHA"
+          echo "Actual checkout SHA: $actual_sha"
+          if [ "$actual_sha" != "$EXPECTED_SHA" ]; then
+            echo "::error::Checked out commit $actual_sha does not match expected source commit $EXPECTED_SHA"
+            exit 1
+          fi
+
+      - name: Toolchain & Build Environment Inspection
+        run: |
+          echo "=== Build Environment Inspection ==="
+          cat /etc/os-release
+          echo "Rust compiler: $(rustc --version)"
+          echo "Cargo: $(cargo --version)"
+          echo "RPM build: $(rpmbuild --version)"
+          echo "Desktop file validator: $(desktop-file-validate --version || echo 'available')"
+          echo "G++ compiler: $(g++ --version | head -n 1)"
+          echo "====================================="
+
+      - name: Validate Desktop Entries & Run Isolated Test Suite
+        env:
+          PLASMA_SIP_TEST_MODE: "1"
+          QT_QPA_PLATFORM: "offscreen"
+        run: |
+          set -euo pipefail
+          mkdir -p build/rpm
+
+          echo "==> Validating desktop files..."
+          desktop-file-validate packaging/desktop/org.kde.plasma_sip.desktop
+          desktop-file-validate packaging/autostart/org.kde.plasma_sip.desktop
+
+          echo "==> Running workspace test suite..."
+          cargo test --workspace --lib --bins 2>&1 | tee build/rpm/test.log
+
+      - name: Build Native RPM Packages from Tracked Source
+        env:
+          RPM_VERSION: ${{ needs.discover.outputs.rpm_version }}
+          RPM_RELEASE: ${{ needs.discover.outputs.rpm_release }}
+        run: |
+          set -euo pipefail
+          echo "==> Building native RPMs with Version=$RPM_VERSION Release=$RPM_RELEASE..."
+          make rpm VERSION="$RPM_VERSION" RELEASE="$RPM_RELEASE" 2>&1 | tee build/rpm/rpmbuild.log
+
+      - name: Verify Deliverables & Generate Checksums
+        if: always()
+        env:
+          FEDORA_VER: ${{ matrix.fedora_version }}
+          TAG_NAME: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ needs.discover.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p build/rpm
+
+          # Record build environment metadata
+          rustc_ver="$(rustc --version 2>/dev/null || echo 'unknown')"
+          build_time="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+
+          cat <<EOF > build/rpm/build-info.json
+          {
+            "project": "plasma-sip",
+            "tag": "$TAG_NAME",
+            "commit": "$COMMIT_SHA",
+            "fedora_version": "$FEDORA_VER",
+            "architecture": "x86_64",
+            "rustc_version": "$rustc_ver",
+            "build_timestamp": "$build_time"
+          }
+          EOF
+
+          # Check whether binary RPMs exist
+          bin_count="$(find build/rpm/RPMS -name "*.rpm" -type f 2>/dev/null | wc -l)"
+          src_count="$(find build/rpm/SRPMS -name "*.rpm" -type f 2>/dev/null | wc -l)"
+
+          echo "Found $bin_count binary RPM(s) and $src_count source RPM(s)."
+
+          if [ "$bin_count" -eq 0 ] || [ "$src_count" -eq 0 ]; then
+            echo "::error::Missing expected RPM deliverables! (binaries: $bin_count, source: $src_count)"
+            exit 1
+          fi
+
+          # Compute SHA256 checksums covering ALL published RPM deliverables (binary, debug, and source RPMs)
+          echo "==> Generating SHA256SUMS for all published RPM deliverables..."
+          find build/rpm/RPMS build/rpm/SRPMS -name "*.rpm" -type f -exec sha256sum {} + | sort -k2 > build/rpm/SHA256SUMS
+          cat build/rpm/SHA256SUMS
+
+      - name: Upload Fedora ${{ matrix.fedora_version }} RPM Artifacts and Logs
+        if: always()
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        with:
+          name: plasma-sip-fedora${{ matrix.fedora_version }}-x86_64-rpm
+          path: |
+            build/rpm/RPMS/**/*.rpm
+            build/rpm/SRPMS/**/*.rpm
+            build/rpm/SHA256SUMS
+            build/rpm/build-info.json
+            build/rpm/*.log
+          if-no-files-found: warn
+          retention-days: 14
+
+  gate:
+    name: Release Gate Summary
+    needs: [discover, build-rpm]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Evaluate Overall Release Gate Status
+        env:
+          DISCOVER_RESULT: ${{ needs.discover.result }}
+          BUILD_RESULT: ${{ needs.build-rpm.result }}
+        run: |
+          echo "Discovery Status: $DISCOVER_RESULT"
+          echo "Matrix Build Status: $BUILD_RESULT"
+
+          if [ "$DISCOVER_RESULT" != "success" ] || [ "$BUILD_RESULT" != "success" ]; then
+            echo "::error::Release build workflow failed! One or more target Fedora builds did not succeed."
+            exit 1
+          fi
+
+          echo "All required Fedora release builds completed successfully."

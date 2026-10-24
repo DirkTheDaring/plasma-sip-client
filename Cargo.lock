@@ -1490,7 +1490,7 @@ checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
 
 [[package]]
 name = "plasma-sip"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "chrono",
  "cxx",
@@ -1510,7 +1510,7 @@ dependencies = [
 
 [[package]]
 name = "plasma-sipd"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "futures",
  "sip-domain",
@@ -1848,7 +1848,7 @@ checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
 
 [[package]]
 name = "sip-audio"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "cpal",
  "rtrb",
@@ -1861,7 +1861,7 @@ dependencies = [
 
 [[package]]
 name = "sip-auth"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "md-5 0.10.6",
  "sha2 0.10.9",
@@ -1873,7 +1873,7 @@ dependencies = [
 
 [[package]]
 name = "sip-domain"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "chrono",
  "serde",
@@ -1885,7 +1885,7 @@ dependencies = [
 
 [[package]]
 name = "sip-engine"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1905,7 +1905,7 @@ dependencies = [
 
 [[package]]
 name = "sip-media"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "bytes",
  "serde",
@@ -1919,7 +1919,7 @@ dependencies = [
 
 [[package]]
 name = "sip-platform"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "futures",
  "sip-domain",
@@ -1932,7 +1932,7 @@ dependencies = [
 
 [[package]]
 name = "sip-protocol"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "bytes",
  "rsip",
@@ -1946,7 +1946,7 @@ dependencies = [
 
 [[package]]
 name = "sip-providers"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "serde",
  "sip-domain",
@@ -1956,7 +1956,7 @@ dependencies = [
 
 [[package]]
 name = "sip-service"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "async-trait",
  "bytes",
@@ -1987,7 +1987,7 @@ dependencies = [
 
 [[package]]
 name = "sip-storage"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "chrono",
  "keyring",
@@ -2001,7 +2001,7 @@ dependencies = [
 
 [[package]]
 name = "sip-transport"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "bytes",
  "sip-domain",

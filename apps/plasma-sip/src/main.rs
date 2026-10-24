@@ -256,7 +256,7 @@ async fn run_cli(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-extern "C" {
+unsafe extern "C" {
     fn init_plasma_sip_desktop_integration();
 }
 
@@ -265,7 +265,10 @@ fn run_gui(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
 
     // Suppress benign upstream KDE Frameworks Kirigami internal binding loop warning (QTBUG-85941 workaround)
     if std::env::var_os("QT_LOGGING_RULES").is_none() {
-        std::env::set_var("QT_LOGGING_RULES", "qt.qml.binding=false");
+        // SAFETY: Called early during startup before secondary threads are spawned.
+        unsafe {
+            std::env::set_var("QT_LOGGING_RULES", "qt.qml.binding=false");
+        }
     }
 
     // Initialize the Qt GUI Application

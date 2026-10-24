@@ -220,7 +220,7 @@ impl PlatformNotifier {
             let mut map = self.active_notifications.lock().await;
             let found = map
                 .iter()
-                .find(|(_, &cid)| cid == call_id)
+                .find(|&(_, cid)| *cid == call_id)
                 .map(|(&id, _)| id);
             if let Some(id) = found {
                 map.remove(&id);

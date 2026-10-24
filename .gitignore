@@ -16,4 +16,5 @@
 *.rpm
 *.tar.gz
 .env
-
+__pycache__/
+*.pyc

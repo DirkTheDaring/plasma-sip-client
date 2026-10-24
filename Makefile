@@ -109,14 +109,18 @@ prep-rpm: ## Prepare isolated RPM build directory hierarchy
 dist: tarball ## Alias for tarball
 
 .PHONY: tarball
-tarball: prep-rpm ## Create pristine source tarball from working directory
+tarball: prep-rpm ## Create pristine source tarball from tracked git tree
 	@echo "==> Generating source tarball $(SOURCES_DIR)/$(TARBALL)..."
-	@$(RM_RF) $(RPM_TOPDIR)/$(NAME)-$(VERSION)
-	@$(MKDIR_P) $(RPM_TOPDIR)/$(NAME)-$(VERSION)
-	@tar --exclude-vcs --exclude='./target' --exclude='./build' --exclude='*.tar.gz' \
-		-cf - . | (cd $(RPM_TOPDIR)/$(NAME)-$(VERSION) && tar -xf -)
-	@tar -czf $(SOURCES_DIR)/$(TARBALL) -C $(RPM_TOPDIR) $(NAME)-$(VERSION)
-	@$(RM_RF) $(RPM_TOPDIR)/$(NAME)-$(VERSION)
+	@if [ -d .git ]; then \
+		git archive --format=tar.gz --prefix=$(NAME)-$(VERSION)/ -o $(SOURCES_DIR)/$(TARBALL) HEAD; \
+	else \
+		$(RM_RF) $(RPM_TOPDIR)/$(NAME)-$(VERSION); \
+		$(MKDIR_P) $(RPM_TOPDIR)/$(NAME)-$(VERSION); \
+		tar --exclude-vcs --exclude='./target' --exclude='./build' --exclude='*.tar.gz' \
+			-cf - . | (cd $(RPM_TOPDIR)/$(NAME)-$(VERSION) && tar -xf -); \
+		tar -czf $(SOURCES_DIR)/$(TARBALL) -C $(RPM_TOPDIR) $(NAME)-$(VERSION); \
+		$(RM_RF) $(RPM_TOPDIR)/$(NAME)-$(VERSION); \
+	fi
 	@echo "==> Source tarball created: $(SOURCES_DIR)/$(TARBALL)"
 
 .PHONY: srpm
@@ -124,15 +128,19 @@ srpm: tarball ## Build Source RPM (.src.rpm)
 	@echo "==> Building Source RPM (SRPM)..."
 	$(RPMBUILD) -bs \
 		--define "_topdir $(RPM_TOPDIR)" \
+		--define "pkg_version $(VERSION)" \
+		--define "pkg_release $(RELEASE)" \
 		$(SPEC_FILE)
 	@echo "==> SRPM built successfully:"
 	@find $(SRPMS_DIR) -type f -name "*.src.rpm"
 
 .PHONY: rpm
 rpm: tarball ## Build binary RPM (.rpm) and debuginfo packages
-	@echo "==> Building Binary RPMs for Fedora 44..."
+	@echo "==> Building Binary RPMs..."
 	$(RPMBUILD) -ba \
 		--define "_topdir $(RPM_TOPDIR)" \
+		--define "pkg_version $(VERSION)" \
+		--define "pkg_release $(RELEASE)" \
 		$(SPEC_FILE)
 	@echo
 	@echo "=============================================================================="

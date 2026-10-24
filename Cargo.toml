@@ -17,8 +17,8 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0"
-edition = "2021"
+version = "1.0.0"
+edition = "2024"
 authors = ["Plasma SIP Contributors"]
 license = "GPL-3.0-or-later"
 repository = "https://github.com/plasma-sip/plasma-sip"

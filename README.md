@@ -33,7 +33,7 @@ Plasma SIP is a modern, production-grade, pure Rust SIP softphone tailored speci
 | [Hardware Test Results](docs/HARDWARE_TEST_RESULTS.md) | AVM FRITZ!Box hardware interoperability matrix and physical test plan |
 | [Deployment Report](docs/DEPLOYMENT_REPORT.md) | Final software verification report and quality gate audit |
 | [System & User Environment](docs/SYSTEM_ENVIRONMENT.md) | Host OS, DNS resolution, network sockets, D-Bus, PipeWire, and desktop session expectations |
-| [Deployment Guide](DEPLOYMENT.md) | Installation scripts, systemd configuration, and RPM packaging |
+| [Deployment Guide](DEPLOYMENT.md) | Installation scripts, systemd configuration, RPM packaging, and dynamic Fedora release support policy |
 | [Testing Strategy](TESTING.md) | Test principles, quality gates, and automated test execution |
 | [Changelog](CHANGELOG.md) | Release notes and version history |
 

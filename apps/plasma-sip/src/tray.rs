@@ -177,7 +177,10 @@ impl StatusNotifierItemService {
 
     async fn provide_xdg_activation_token(&self, token: &str) {
         info!(token = %token, "Received XDG activation token from KDE Plasma");
-        std::env::set_var("XDG_ACTIVATION_TOKEN", token);
+        // SAFETY: Setting environment variable provided by KDE Plasma compositor.
+        unsafe {
+            std::env::set_var("XDG_ACTIVATION_TOKEN", token);
+        }
     }
 
     #[zbus(signal)]

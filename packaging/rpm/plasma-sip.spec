@@ -1,6 +1,6 @@
 Name:           plasma-sip
-Version:        0.1.0
-Release:        1%{?dist}
+Version:        %{?pkg_version}%{!?pkg_version:1.0.0}
+Release:        %{?pkg_release}%{!?pkg_release:1}%{?dist}
 Summary:        Pure Rust SIP soft phone for KDE Plasma
 
 License:        GPL-3.0-or-later
@@ -8,7 +8,7 @@ URL:            https://github.com/plasma-sip/plasma-sip
 Source0:        %{url}/archive/v%{version}/%{name}-%{version}.tar.gz
 
 BuildRequires:  cargo
-BuildRequires:  rust >= 1.75
+BuildRequires:  rust >= 1.85
 BuildRequires:  gcc-c++
 BuildRequires:  qt6-qtbase-devel
 BuildRequires:  qt6-qtdeclarative-devel
@@ -129,5 +129,8 @@ fi
 %{_prefix}/lib/firewalld/services/plasma-sip.xml
 
 %changelog
+* Sat Oct 24 2026 Plasma SIP Team <maintainers@plasma-sip.org> - 1.0.0-1
+- Bump version to 1.0.0 and update to Rust 2024 edition.
+
 * Mon Oct 19 2026 Plasma SIP Team <maintainers@plasma-sip.org> - 0.1.0-1
 - Initial production-ready release of Plasma SIP softphone.
