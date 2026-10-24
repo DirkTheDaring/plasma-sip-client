@@ -52,27 +52,38 @@ Kirigami.Page {
         var results = [];
         for (var i = 0; i < allContacts.length && results.length < 3; i++) {
             var c = allContacts[i];
+            var contactName = c.display_name || c.name || "";
             var matchedNum = null;
+            var matchedQd = c.quickdial || null;
             if (c.numbers) {
                 for (var j = 0; j < c.numbers.length; j++) {
-                    var n = c.numbers[j].number.replace(/[^\d+*#]/g, "");
-                    if (n.indexOf(cleanQ) !== -1 || (cleanQ.length >= 2 && n.endsWith(cleanQ))) {
-                        matchedNum = c.numbers[j].number;
+                    var raw = c.numbers[j].raw_number || c.numbers[j].number || "";
+                    var qd = c.numbers[j].quickdial || null;
+                    if (qd && ("**" + qd === query || qd === query)) {
+                        matchedNum = raw;
+                        matchedQd = qd;
+                        break;
+                    }
+                    var n = raw.replace(/[^\d+*#]/g, "");
+                    if (cleanQ.length > 0 && (n.indexOf(cleanQ) !== -1 || (cleanQ.length >= 2 && n.endsWith(cleanQ)))) {
+                        matchedNum = raw;
+                        matchedQd = qd || matchedQd;
                         break;
                     }
                 }
             }
-            if (matchedNum || (c.quickdial && ("**" + c.quickdial === query || c.quickdial === query))) {
+            var firstNum = (c.numbers && c.numbers.length > 0) ? (c.numbers[0].raw_number || c.numbers[0].number || "") : query;
+            if (matchedNum || (matchedQd && ("**" + matchedQd === query || matchedQd === query))) {
                 results.push({
-                    name: c.name,
-                    number: matchedNum || (c.numbers && c.numbers.length > 0 ? c.numbers[0].number : query),
-                    quickdial: c.quickdial
+                    name: contactName,
+                    number: matchedNum || firstNum,
+                    quickdial: matchedQd
                 });
-            } else if (c.name && c.name.toLowerCase().indexOf(query.toLowerCase()) !== -1) {
+            } else if (contactName && contactName.toLowerCase().indexOf(query.toLowerCase()) !== -1) {
                 results.push({
-                    name: c.name,
-                    number: c.numbers && c.numbers.length > 0 ? c.numbers[0].number : query,
-                    quickdial: c.quickdial
+                    name: contactName,
+                    number: firstNum,
+                    quickdial: matchedQd
                 });
             }
         }
@@ -832,6 +843,18 @@ Kirigami.Page {
     // -------------------------------------------------------------------------
     // Audio Quick Settings Sheet (Instant One-Click Audio Device Switching)
     // -------------------------------------------------------------------------
+    function applyAudioConfig() {
+        if (!page.bridge) return;
+        var outId = (audioQuickSheet.quickOutputSelector ? audioQuickSheet.quickOutputSelector.currentValue : "default") || "default";
+        var inId = (audioQuickSheet.quickInputSelector ? audioQuickSheet.quickInputSelector.currentValue : "default") || "default";
+        var ringId = page.audioConfig.ringing_device_id || "default";
+        var isSil = page.isSilent;
+        var r = page.audioConfig.ringtone || "standard";
+        var cp = page.audioConfig.custom_ringtone_path || "";
+        var vol = audioQuickSheet.quickVolumeSlider ? Math.round(audioQuickSheet.quickVolumeSlider.value) : 80;
+        page.bridge.save_audio_config(inId, outId, ringId, isSil, r, cp, vol);
+    }
+
     Kirigami.OverlaySheet {
         id: audioQuickSheet
         title: qsTr("Audio Quick Settings")
@@ -840,6 +863,14 @@ Kirigami.Page {
             parent ? parent.height - Kirigami.Units.gridUnit * 4 : 520,
             audioQuickLayout.implicitHeight + Kirigami.Units.gridUnit * 5
         )
+
+        property alias quickOutputSelector: quickOutputSelector
+        property alias quickInputSelector: quickInputSelector
+        property alias quickVolumeSlider: quickVolumeSlider
+
+        function applyAudioConfig() {
+            page.applyAudioConfig();
+        }
 
         ColumnLayout {
             id: audioQuickLayout
@@ -885,7 +916,7 @@ Kirigami.Page {
                         }
                     }
                     onActivated: {
-                        applyAudioConfig();
+                        page.applyAudioConfig();
                     }
                 }
             }
@@ -929,7 +960,7 @@ Kirigami.Page {
                         }
                     }
                     onActivated: {
-                        applyAudioConfig();
+                        page.applyAudioConfig();
                     }
                 }
             }
@@ -953,7 +984,7 @@ Kirigami.Page {
                     to: 100
                     value: page.audioConfig.ringer_volume !== undefined ? page.audioConfig.ringer_volume : 80
                     onMoved: {
-                        applyAudioConfig();
+                        page.applyAudioConfig();
                     }
                 }
 
@@ -1003,18 +1034,6 @@ Kirigami.Page {
                     }
                 }
             }
-        }
-
-        function applyAudioConfig() {
-            if (!page.bridge) return;
-            var outId = quickOutputSelector.currentValue || "default";
-            var inId = quickInputSelector.currentValue || "default";
-            var ringId = page.audioConfig.ringing_device_id || "default";
-            var isSil = page.isSilent;
-            var r = page.audioConfig.ringtone || "standard";
-            var cp = page.audioConfig.custom_ringtone_path || "";
-            var vol = Math.round(quickVolumeSlider.value);
-            page.bridge.save_audio_config(inId, outId, ringId, isSil, r, cp, vol);
         }
     }
 }

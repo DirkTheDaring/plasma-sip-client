@@ -280,11 +280,11 @@ Kirigami.Page {
                         implicitWidth: 44
                         implicitHeight: 44
                         radius: 22
-                        color: page.getAvatarColor(modelData.name)
+                        color: page.getAvatarColor(modelData.display_name || modelData.name || "")
 
                         Label {
                             anchors.centerIn: parent
-                            text: page.getInitials(modelData.name)
+                            text: page.getInitials(modelData.display_name || modelData.name || "")
                             font.bold: true
                             font.pointSize: 13
                             color: "white"
@@ -302,7 +302,7 @@ Kirigami.Page {
                             spacing: Kirigami.Units.smallSpacing
 
                             Label {
-                                text: modelData.name || qsTr("Unknown Contact")
+                                text: modelData.display_name || modelData.name || qsTr("Unknown Contact")
                                 font.weight: Font.DemiBold
                                 font.pointSize: Kirigami.Theme.defaultFont.pointSize + 1
                                 elide: Text.ElideRight
@@ -311,7 +311,8 @@ Kirigami.Page {
 
                             // Quickdial Tag
                             Rectangle {
-                                visible: !!modelData.quickdial && modelData.quickdial !== ""
+                                property string qdText: modelData.quickdial || (modelData.numbers && modelData.numbers.length > 0 && modelData.numbers[0].quickdial ? modelData.numbers[0].quickdial : "")
+                                visible: qdText !== ""
                                 implicitHeight: 18
                                 implicitWidth: qdLabel.implicitWidth + 10
                                 radius: 9
@@ -322,7 +323,7 @@ Kirigami.Page {
                                 Label {
                                     id: qdLabel
                                     anchors.centerIn: parent
-                                    text: "**" + modelData.quickdial
+                                    text: "**" + parent.qdText
                                     font.pointSize: Kirigami.Theme.smallFont.pointSize * 0.85
                                     font.weight: Font.Medium
                                     color: Kirigami.Theme.highlightColor
@@ -361,6 +362,8 @@ Kirigami.Page {
                                     Layout.fillWidth: true
                                     spacing: Kirigami.Units.smallSpacing
 
+                                    readonly property string currentNumStr: (modelData && (modelData.raw_number || modelData.number)) ? (modelData.raw_number || modelData.number) : ""
+
                                     // Type badge
                                     Rectangle {
                                         implicitHeight: 20
@@ -391,11 +394,31 @@ Kirigami.Page {
                                     // Phone Number String
                                     Label {
                                         Layout.fillWidth: true
-                                        text: modelData.number
+                                        text: currentNumStr
                                         font.pointSize: Kirigami.Theme.defaultFont.pointSize
                                         font.family: "Noto Sans, Inter, Roboto, sans-serif"
                                         elide: Text.ElideRight
                                         color: Kirigami.Theme.textColor
+                                    }
+
+                                    // Quickdial badge for individual number
+                                    Rectangle {
+                                        visible: !!modelData.quickdial && modelData.quickdial !== ""
+                                        implicitHeight: 18
+                                        implicitWidth: numQdLabel.implicitWidth + 10
+                                        radius: 9
+                                        color: Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.15)
+                                        border.color: Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.3)
+                                        border.width: 1
+
+                                        Label {
+                                            id: numQdLabel
+                                            anchors.centerIn: parent
+                                            text: "**" + (modelData.quickdial || "")
+                                            font.pointSize: Kirigami.Theme.smallFont.pointSize * 0.85
+                                            font.weight: Font.Medium
+                                            color: Kirigami.Theme.highlightColor
+                                        }
                                     }
 
                                     // Dial / Call Action Button
@@ -406,7 +429,7 @@ Kirigami.Page {
                                         icon.name: "call-start"
                                         icon.width: 16
                                         icon.height: 16
-                                        ToolTip.text: qsTr("Call %1").arg(modelData.number)
+                                        ToolTip.text: qsTr("Call %1").arg(currentNumStr)
                                         ToolTip.visible: hovered
                                         background: Rectangle {
                                             radius: 16
@@ -415,7 +438,9 @@ Kirigami.Page {
                                                    Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.12)
                                         }
                                         onClicked: {
-                                            page.startCallRequested(modelData.number);
+                                            if (currentNumStr !== "") {
+                                                page.startCallRequested(currentNumStr);
+                                            }
                                         }
                                     }
 
@@ -436,7 +461,9 @@ Kirigami.Page {
                                                    "transparent"
                                         }
                                         onClicked: {
-                                            page.prefillRequested(modelData.number);
+                                            if (currentNumStr !== "") {
+                                                page.prefillRequested(currentNumStr);
+                                            }
                                         }
                                     }
                                 }
