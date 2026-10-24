@@ -10,6 +10,7 @@ Source0:        %{url}/archive/v%{version}/%{name}-%{version}.tar.gz
 BuildRequires:  cargo
 BuildRequires:  rust >= 1.85
 BuildRequires:  gcc-c++
+BuildRequires:  lld
 BuildRequires:  qt6-qtbase-devel
 BuildRequires:  qt6-qtdeclarative-devel
 BuildRequires:  systemd-rpm-macros

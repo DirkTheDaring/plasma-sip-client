@@ -156,6 +156,7 @@ jobs:
             cargo \
             rust \
             gcc-c++ \
+            lld \
             qt6-qtbase-devel \
             qt6-qtbase-gui \
             qt6-qtdeclarative-devel \
