@@ -1,5 +1,5 @@
 Name:           plasma-sip
-Version:        %{?pkg_version}%{!?pkg_version:1.1.0}
+Version:        %{?pkg_version}%{!?pkg_version:1.1.1}
 Release:        %{?pkg_release}%{!?pkg_release:1}%{?dist}
 Summary:        Pure Rust SIP soft phone for KDE Plasma
 
@@ -130,6 +130,10 @@ fi
 %{_prefix}/lib/firewalld/services/plasma-sip.xml
 
 %changelog
+* Sat Oct 24 2026 Plasma SIP Team <maintainers@plasma-sip.org> - 1.1.1-1
+- Bump version to 1.1.1.
+- Fix QML audio config scope, contact number/name display bindings, and XML entity decoding.
+
 * Sat Oct 24 2026 Plasma SIP Team <maintainers@plasma-sip.org> - 1.1.0-1
 - Bump version to 1.1.0.
 - Add contacts, FRITZ!Box phonebook sync, and convergent 4-tab UI.

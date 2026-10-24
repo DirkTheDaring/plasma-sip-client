@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-10-24
+
+### Fixed
+- **QML Audio Quick Settings Scope:** Resolved `ReferenceError: applyAudioConfig is not defined` by elevating configuration application logic to the `DialPadView` root scope.
+- **Contact Display & Phone Number Binding:** Fixed contact name binding to `display_name` and phone number binding to `raw_number`, restoring contact names, avatars, and dial buttons.
+- **FRITZ!Box Source & XML Entities:** Added automatic unescaping of XML entities in router phonebook names and fixed `fritz_box` source pill badge display.
+- **CI & Packaging Linker Configuration:** Added LLVM `lld` linker and packaging pre-build guarantees for continuous integration workflows.
+
 ## [1.1.0] - 2026-10-24
 
 ### Added
