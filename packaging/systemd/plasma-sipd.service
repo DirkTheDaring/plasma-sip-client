@@ -1,0 +1,22 @@
+[Unit]
+Description=Plasma SIP Background Telephony Daemon
+Documentation=https://github.com/plasma-sip/plasma-sip
+After=network.target sound.target pipewire.service
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/plasma-sipd
+Restart=on-failure
+RestartSec=5s
+KillMode=mixed
+TimeoutStopSec=10s
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.local/share/plasma-sip %h/.local/share
+
+[Install]
+WantedBy=default.target

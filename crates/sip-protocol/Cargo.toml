@@ -1,0 +1,15 @@
+[package]
+name = "sip-protocol"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+sip-domain = { workspace = true }
+sip-auth = { workspace = true }
+rsip = { workspace = true }
+bytes = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+tokio = { workspace = true }

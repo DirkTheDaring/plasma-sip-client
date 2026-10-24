@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Plasma SIP
+GenericName=SIP Softphone
+Comment=Start Plasma SIP softphone minimized in system tray
+Exec=plasma-sip --minimized
+Icon=org.kde.plasma_sip
+Terminal=false
+Type=Application
+Categories=Network;Telephony;Qt;KDE;
+StartupWMClass=org.kde.plasma_sip
+X-KDE-autostart-phase=2

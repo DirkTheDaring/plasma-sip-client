@@ -1,0 +1,21 @@
+[package]
+name = "sip-engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+sip-domain = { workspace = true }
+sip-protocol = { workspace = true }
+sip-transport = { workspace = true }
+sip-auth = { workspace = true }
+sip-media = { workspace = true }
+sip-audio = { workspace = true }
+sip-providers = { workspace = true }
+tokio = { workspace = true }
+uuid = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }
+chrono = { workspace = true }
+zeroize = { workspace = true }

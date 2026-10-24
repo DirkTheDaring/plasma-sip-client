@@ -1,0 +1,15 @@
+[package]
+name = "sip-media"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+sip-domain = { workspace = true }
+sip-audio = { workspace = true }
+bytes = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+serde = { workspace = true }

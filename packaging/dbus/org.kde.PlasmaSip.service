@@ -1,0 +1,4 @@
+[D-BUS Service]
+Name=org.kde.PlasmaSip
+Exec=/usr/bin/plasma-sipd
+SystemdService=plasma-sipd.service

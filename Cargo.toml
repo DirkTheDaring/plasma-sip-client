@@ -1,0 +1,75 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/sip-domain",
+    "crates/sip-protocol",
+    "crates/sip-transport",
+    "crates/sip-auth",
+    "crates/sip-media",
+    "crates/sip-audio",
+    "crates/sip-engine",
+    "crates/sip-providers",
+    "crates/sip-storage",
+    "crates/sip-service",
+    "crates/sip-platform",
+    "apps/plasma-sipd",
+    "apps/plasma-sip",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Plasma SIP Contributors"]
+license = "GPL-3.0-or-later"
+repository = "https://github.com/plasma-sip/plasma-sip"
+
+[workspace.dependencies]
+# Async & Networking
+tokio = { version = "1.43", features = ["full"] }
+tokio-util = { version = "0.7", features = ["codec"] }
+bytes = "1.10"
+futures = "0.3"
+
+# Serialization & Models
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+uuid = { version = "1.15", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+# Protocol & SIP
+rsip = "0.4"
+rtp-rs = "0.6"
+md-5 = "0.10"
+sha2 = "0.10"
+
+# Audio & Media
+cpal = "0.18"
+rtrb = "0.3"
+
+# IPC & Desktop
+zbus = { version = "5.5", features = ["tokio"] }
+zvariant = "5.4"
+
+# Storage & Security
+rusqlite = { version = "0.34", features = ["bundled"] }
+keyring = { version = "3.6", features = ["linux-native"] }
+zeroize = { version = "1.8", features = ["zeroize_derive"] }
+
+# Utilities & Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "time"] }
+thiserror = "2.0"
+async-trait = "0.1"
+
+# Internal Workspace Crates
+sip-domain = { path = "crates/sip-domain" }
+sip-protocol = { path = "crates/sip-protocol" }
+sip-transport = { path = "crates/sip-transport" }
+sip-auth = { path = "crates/sip-auth" }
+sip-media = { path = "crates/sip-media" }
+sip-audio = { path = "crates/sip-audio" }
+sip-engine = { path = "crates/sip-engine" }
+sip-providers = { path = "crates/sip-providers" }
+sip-storage = { path = "crates/sip-storage" }
+sip-service = { path = "crates/sip-service" }
+sip-platform = { path = "crates/sip-platform" }

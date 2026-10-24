@@ -1,0 +1,17 @@
+[package]
+name = "sip-audio"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+sip-domain = { workspace = true }
+cpal = { workspace = true }
+rtrb = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+tracing-subscriber = { workspace = true }
+

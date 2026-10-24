@@ -1,0 +1,2 @@
+# Enable Plasma SIP background telephony daemon for user sessions by default
+enable plasma-sipd.service

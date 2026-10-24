@@ -1,0 +1,35 @@
+[package]
+name = "sip-service"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+sip-domain = { workspace = true }
+sip-protocol = { workspace = true }
+sip-transport = { workspace = true }
+sip-auth = { workspace = true }
+sip-media = { workspace = true }
+sip-audio = { workspace = true }
+sip-engine = { workspace = true }
+sip-providers = { workspace = true }
+sip-storage = { workspace = true }
+sip-platform = { workspace = true }
+zbus = { workspace = true }
+zvariant = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }
+chrono = { workspace = true }
+
+[dev-dependencies]
+futures = { workspace = true }
+bytes = { workspace = true }
+cpal = { workspace = true }
+rtrb = { workspace = true }
+rusqlite = { workspace = true }
+

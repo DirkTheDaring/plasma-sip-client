@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<service>
+  <short>Plasma SIP</short>
+  <description>Plasma SIP Softphone telephony signaling (SIP UDP/TCP 5060) and media communication.</description>
+  <port protocol="udp" port="5060"/>
+  <port protocol="tcp" port="5060"/>
+  <helper name="sip"/>
+</service>

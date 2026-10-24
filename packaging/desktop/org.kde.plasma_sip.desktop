@@ -1,0 +1,19 @@
+[Desktop Entry]
+Name=Plasma SIP
+GenericName=SIP Softphone
+Comment=Pure Rust SIP softphone for KDE Plasma
+Exec=plasma-sip %u
+Icon=org.kde.plasma_sip
+Terminal=false
+Type=Application
+Categories=Network;Telephony;Qt;KDE;
+MimeType=x-scheme-handler/sip;x-scheme-handler/sips;x-scheme-handler/tel;
+StartupWMClass=org.kde.plasma_sip
+SingleMainWindow=true
+Keywords=SIP;VoIP;phone;telephony;fritzbox;call;dialer;
+X-KDE-Protocols=sip,sips,tel
+Actions=Dial;
+
+[Desktop Action Dial]
+Name=Open Dial Pad
+Exec=plasma-sip --dial

@@ -1,0 +1,23 @@
+[package]
+name = "plasma-sipd"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "plasma-sipd"
+path = "src/main.rs"
+
+[dependencies]
+sip-domain = { workspace = true }
+sip-protocol = { workspace = true }
+sip-transport = { workspace = true }
+sip-engine = { workspace = true }
+sip-service = { workspace = true }
+sip-storage = { workspace = true }
+sip-platform = { workspace = true }
+zbus = { workspace = true }
+tokio = { workspace = true }
+futures = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
