@@ -18,3 +18,4 @@
 .env
 __pycache__/
 *.pyc
+verification_artifacts/
