@@ -129,11 +129,13 @@ def main():
 
     github_output = os.environ.get("GITHUB_OUTPUT")
     if github_output:
+        is_pre_str = "true" if prerelease else "false"
         with open(github_output, "a") as f:
             f.write(f"tag_version={tag_version}\n")
             f.write(f"base_version={base_version}\n")
             f.write(f"rpm_version={rpm_version}\n")
             f.write(f"rpm_release={rpm_release}\n")
+            f.write(f"is_prerelease={is_pre_str}\n")
 
 
 if __name__ == "__main__":

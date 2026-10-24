@@ -11,6 +11,13 @@ import rpm
 
 from validate_tag import validate_tag_string, compute_rpm_fields, validate_against_cargo
 from discover_fedora import resolve_matrix
+from publish_release import (
+    parse_semver,
+    is_higher_version,
+    validate_and_stage_deliverables,
+    generate_release_notes,
+    compute_sha256,
+)
 
 
 class TestReleaseValidation(unittest.TestCase):
@@ -117,5 +124,175 @@ class TestReleaseValidation(unittest.TestCase):
             resolve_matrix({"releases": [{"id_prefix": "FEDORA-EPEL", "name": "EPEL-10", "state": "current", "version": "10"}]})
 
 
+class TestPublishRelease(unittest.TestCase):
+
+    def test_semver_parsing_and_comparison(self):
+        # Valid semver
+        self.assertEqual(parse_semver("v1.0.0"), (1, 0, 0, True, ""))
+        self.assertEqual(parse_semver("1.0.0"), (1, 0, 0, True, ""))
+        self.assertEqual(parse_semver("v1.2.3-rc.1"), (1, 2, 3, False, "rc.1"))
+
+        # Version comparisons
+        self.assertTrue(is_higher_version("v1.1.0", "v1.0.0"))
+        self.assertTrue(is_higher_version("v1.0.1", "v1.0.0"))
+        self.assertTrue(is_higher_version("v1.0.0", "v1.0.0-rc.1"))
+        self.assertTrue(is_higher_version("v1.0.0-rc.2", "v1.0.0-rc.1"))
+        self.assertFalse(is_higher_version("v1.0.0", "v1.1.0"))
+        self.assertFalse(is_higher_version("v1.0.0", "v1.0.0"))
+
+    def test_release_notes_generation(self):
+        notes = generate_release_notes(
+            tag="v1.0.0",
+            commit="f792c2e61d401e1fdaa480446d3cd88b547692eb",
+            fedora_versions=["44", "43", "42"],
+            workflow_run_url="https://github.com/DirkTheDaring/plasma-sip-client/actions/runs/40113091755",
+            rpm_version="1.0.0",
+            rpm_release="1",
+        )
+        self.assertIn("Plasma SIP Softphone v1.0.0", notes)
+        self.assertIn("plasma-sip-1.0.0-1.fc44.x86_64.rpm", notes)
+        self.assertIn("plasma-sip-1.0.0-1.fc43.x86_64.rpm", notes)
+        self.assertIn("plasma-sip-1.0.0-1.fc42.x86_64.rpm", notes)
+        self.assertIn("f792c2e61d401e1fdaa480446d3cd88b547692eb", notes)
+        self.assertIn("Testing Boundaries & Known Limitations", notes)
+        self.assertIn("sudo dnf install", notes)
+
+    def test_deliverable_staging_and_verification(self):
+        import tempfile
+        import json
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            base_path = Path(tmp_dir)
+            artifacts_dir = base_path / "artifacts"
+            staging_dir = base_path / "staging"
+            artifacts_dir.mkdir()
+
+            fedora_matrix = ["44", "43", "42"]
+            tag = "v1.0.0"
+            commit = "abc123commit"
+            rpm_ver = "1.0.0"
+            rpm_rel = "1"
+
+            # Create mock artifact tree
+            for ver in fedora_matrix:
+                f_dir = artifacts_dir / f"fedora{ver}-rpms"
+                f_dir.mkdir()
+                rpms = [
+                    f"plasma-sip-{rpm_ver}-{rpm_rel}.fc{ver}.x86_64.rpm",
+                    f"plasma-sip-{rpm_ver}-{rpm_rel}.fc{ver}.src.rpm",
+                    f"plasma-sip-debuginfo-{rpm_ver}-{rpm_rel}.fc{ver}.x86_64.rpm",
+                    f"plasma-sip-debugsource-{rpm_ver}-{rpm_rel}.fc{ver}.x86_64.rpm",
+                ]
+                sums = []
+                for r in rpms:
+                    r_path = f_dir / r
+                    content = f"dummy binary content for {r}".encode()
+                    r_path.write_bytes(content)
+                    digest = compute_sha256(r_path)
+                    sums.append(f"{digest}  build/rpm/RPMS/x86_64/{r}\n")
+
+                (f_dir / "SHA256SUMS").write_text("".join(sums))
+                meta = {
+                    "project": "plasma-sip",
+                    "tag": tag,
+                    "commit": commit,
+                    "fedora_version": ver,
+                    "architecture": "x86_64",
+                }
+                (f_dir / f"build-info-fedora{ver}.json").write_text(json.dumps(meta))
+
+            # Run validation and staging
+            staged = validate_and_stage_deliverables(
+                artifacts_dir=artifacts_dir,
+                staging_dir=staging_dir,
+                fedora_versions=fedora_matrix,
+                tag=tag,
+                commit=commit,
+                rpm_version=rpm_ver,
+                rpm_release=rpm_rel,
+            )
+
+            # Staged deliverables: 3 fedoras * 4 rpms = 12 rpms + 3 metadata + 1 SHA256SUMS = 16 files
+            self.assertEqual(len(staged), 16)
+            staged_names = {p.name for p in staged}
+
+            # Check individual RPMs present
+            for ver in fedora_matrix:
+                self.assertIn(f"plasma-sip-{rpm_ver}-{rpm_rel}.fc{ver}.x86_64.rpm", staged_names)
+                self.assertIn(f"plasma-sip-{rpm_ver}-{rpm_rel}.fc{ver}.src.rpm", staged_names)
+                self.assertIn(f"plasma-sip-debuginfo-{rpm_ver}-{rpm_rel}.fc{ver}.x86_64.rpm", staged_names)
+                self.assertIn(f"plasma-sip-debugsource-{rpm_ver}-{rpm_rel}.fc{ver}.x86_64.rpm", staged_names)
+                self.assertIn(f"build-info-fedora{ver}.json", staged_names)
+
+            # Check SHA256SUMS file exists and contains filenames WITHOUT directory prefixes
+            self.assertIn("SHA256SUMS", staged_names)
+            sums_content = (staging_dir / "SHA256SUMS").read_text()
+            for line in sums_content.strip().splitlines():
+                parts = line.split()
+                self.assertEqual(len(parts), 2)
+                fname = parts[1]
+                self.assertNotIn("/", fname, f"Checksum file path must not contain slashes: {fname}")
+                self.assertTrue((staging_dir / fname).exists(), f"Asset {fname} must exist in staging")
+
+    def test_deliverable_staging_validation_failures(self):
+        import tempfile
+        import json
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            base_path = Path(tmp_dir)
+            artifacts_dir = base_path / "artifacts"
+            staging_dir = base_path / "staging"
+            artifacts_dir.mkdir()
+
+            f_dir = artifacts_dir / "fedora44-rpms"
+            f_dir.mkdir()
+
+            # Missing files error
+            with self.assertRaises(FileNotFoundError):
+                validate_and_stage_deliverables(
+                    artifacts_dir=artifacts_dir,
+                    staging_dir=staging_dir,
+                    fedora_versions=["44"],
+                    tag="v1.0.0",
+                    commit="commit1",
+                    rpm_version="1.0.0",
+                    rpm_release="1",
+                )
+
+            # Create mock rpms
+            for r in [
+                "plasma-sip-1.0.0-1.fc44.x86_64.rpm",
+                "plasma-sip-1.0.0-1.fc44.src.rpm",
+                "plasma-sip-debuginfo-1.0.0-1.fc44.x86_64.rpm",
+                "plasma-sip-debugsource-1.0.0-1.fc44.x86_64.rpm",
+            ]:
+                (f_dir / r).write_bytes(b"content")
+
+            # Mismatched commit in metadata
+            bad_meta = {
+                "project": "plasma-sip",
+                "tag": "v1.0.0",
+                "commit": "different_commit",
+                "fedora_version": "44",
+                "architecture": "x86_64",
+            }
+            (f_dir / "build-info-fedora44.json").write_text(json.dumps(bad_meta))
+
+            with self.assertRaises(ValueError) as ctx:
+                validate_and_stage_deliverables(
+                    artifacts_dir=artifacts_dir,
+                    staging_dir=staging_dir,
+                    fedora_versions=["44"],
+                    tag="v1.0.0",
+                    commit="commit1",
+                    rpm_version="1.0.0",
+                    rpm_release="1",
+                )
+            self.assertIn("commit mismatch", str(ctx.exception))
+
+
 if __name__ == "__main__":
     unittest.main()
+
