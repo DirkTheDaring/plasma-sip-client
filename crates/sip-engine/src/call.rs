@@ -4,15 +4,15 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{Mutex, mpsc};
 use tracing::{debug, error, info, warn};
 
 use sip_auth::{DigestAuthorizer, DigestChallenge};
 use sip_domain::{AudioCodec, CallId, CallState, DisconnectReason, SipAccount};
-use sip_media::{dtmf::DtmfEvent, stats::MediaStats, MediaSession, MediaSessionConfig};
+use sip_media::{MediaSession, MediaSessionConfig, dtmf::DtmfEvent, stats::MediaStats};
 use sip_protocol::{
-    generate_branch, generate_tag, SdpSession, SipDialog, SipMethod, SipRequest, SipResponse,
-    TransactionKey, TransactionManager,
+    SdpSession, SipDialog, SipMethod, SipRequest, SipResponse, TransactionKey, TransactionManager,
+    generate_branch, generate_tag,
 };
 use sip_transport::SipUdpTransport;
 use zeroize::Zeroizing;
@@ -464,7 +464,9 @@ impl OutgoingCallSession {
                         if was_cancelled {
                             // RFC 3261 Section 9.2: Call was cancelled locally before 200 OK arrived.
                             // Must establish session (ACK sent above) and immediately terminate with BYE.
-                            info!("200 OK received for cancelled call; terminating immediately with BYE (RFC 3261 Section 9.2)");
+                            info!(
+                                "200 OK received for cancelled call; terminating immediately with BYE (RFC 3261 Section 9.2)"
+                            );
                             let bye = dialog.create_bye(&via);
                             let _ = self
                                 .transport
@@ -890,7 +892,7 @@ impl OutgoingCallSession {
                 return Err(format!(
                     "re-INVITE resume rejected with status {}",
                     r.status_code
-                ))
+                ));
             }
             _ => return Err("re-INVITE resume timed out".into()),
         };

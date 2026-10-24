@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Contacts & FRITZ!Box Phonebook Synchronization:**
+  - Pure-Rust TR-064 protocol client (`X_AVM-DE_OnTel:1`) with HTTP Digest MD5 authentication.
+  - Automatic phonebook synchronization from AVM FRITZ!Boxes and local PBXs into SQLite schema migration 3.
+  - T9 predictive and vanity number search algorithm with normalized digits index.
+  - Automatic caller name resolution for incoming calls and call history entries.
+  - Dedicated `ContactsView.qml` with instant search, initials avatar bubbles, phone number type chips (`Home`, `Mobile`, `Work`, `Internal`), and one-tap dialing.
+  - `sync-phonebook` and `contacts [query]` CLI subcommands in `plasma-sip`.
+- **Convergent 4-Tab Interface & Visual Redesign:**
+  - Modern bottom navigation bar with 4 convergent tabs: Keypad, History, Contacts, Settings (`Ctrl+1..4`).
+  - Tactile squircle keypad buttons with subtle Breeze Dark borders and ambient hover glow.
+  - Real-time T9 contact match suggestion strip above the keypad.
+  - Unified `SettingsView.qml` consolidating SIP Accounts, FRITZ!Box Phonebook, and Audio settings.
+
 ## [0.1.0] - 2026-10-19
 
 ### Added

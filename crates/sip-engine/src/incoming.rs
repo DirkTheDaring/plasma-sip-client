@@ -3,13 +3,13 @@
 use chrono::Utc;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{Mutex, mpsc};
 use tracing::info;
 
 use crate::call::CallEvent;
 use sip_domain::{AudioCodec, CallId, CallState, DisconnectReason};
-use sip_media::{dtmf::DtmfEvent, stats::MediaStats, MediaSession, MediaSessionConfig};
-use sip_protocol::{generate_tag, SdpSession, SipDialog, SipRequest, SipResponse};
+use sip_media::{MediaSession, MediaSessionConfig, dtmf::DtmfEvent, stats::MediaStats};
+use sip_protocol::{SdpSession, SipDialog, SipRequest, SipResponse, generate_tag};
 use sip_transport::SipUdpTransport;
 
 pub struct IncomingCallSession {
@@ -203,7 +203,12 @@ impl IncomingCallSession {
         );
         let sdp_body = sdp_answer.serialize();
 
-        let contact_hdr = format!("<sip:{}@{}:{}>", extract_callee_user(&self.invite_request), local_ip, local_addr.port());
+        let contact_hdr = format!(
+            "<sip:{}@{}:{}>",
+            extract_callee_user(&self.invite_request),
+            local_ip,
+            local_addr.port()
+        );
         let ok_res = SipResponse::create_for_request(
             &self.invite_request,
             200,
@@ -331,13 +336,14 @@ impl IncomingCallSession {
         let local_addr = self.transport.local_addr();
         let local_ip = self.transport.local_ip_for(self.remote_addr);
 
-        let sdp_answer = SdpSession::new(
-            local_ip,
-            local_addr.port() + 10,
-            vec![8, 0, 101],
-        );
+        let sdp_answer = SdpSession::new(local_ip, local_addr.port() + 10, vec![8, 0, 101]);
         let sdp_body = sdp_answer.serialize();
-        let contact_hdr = format!("<sip:{}@{}:{}>", extract_callee_user(&self.invite_request), local_ip, local_addr.port());
+        let contact_hdr = format!(
+            "<sip:{}@{}:{}>",
+            extract_callee_user(&self.invite_request),
+            local_ip,
+            local_addr.port()
+        );
 
         let ok_res = SipResponse::create_for_request(
             &self.invite_request,
@@ -364,7 +370,9 @@ impl IncomingCallSession {
 
         tokio::spawn(async move {
             tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
-            let _ = transport.send_to(bye_req.serialize().as_bytes(), remote_addr).await;
+            let _ = transport
+                .send_to(bye_req.serialize().as_bytes(), remote_addr)
+                .await;
         });
 
         *st = CallState::Terminated {
@@ -384,7 +392,8 @@ impl IncomingCallSession {
         let mut st = self.state.lock().await;
         if matches!(*st, CallState::Terminated { .. }) {
             // Already terminated: absorb retransmitted CANCEL with 200 OK (RFC 3261 Section 9.2)
-            let ok_cancel = SipResponse::create_for_request(cancel_req, 200, "OK", None, None, None);
+            let ok_cancel =
+                SipResponse::create_for_request(cancel_req, 200, "OK", None, None, None);
             let _ = self
                 .transport
                 .send_to(ok_cancel.serialize().as_bytes(), self.remote_addr)
@@ -646,7 +655,7 @@ impl IncomingCallSession {
                 return Err(format!(
                     "re-INVITE resume rejected with status {}",
                     r.status_code
-                ))
+                ));
             }
             _ => return Err("re-INVITE resume timed out".into()),
         };

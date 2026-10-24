@@ -1,6 +1,6 @@
 use sip_audio::{
-    find_input_device, find_output_device, list_input_devices, list_output_devices,
-    AudioBackendMode, AudioEngine,
+    AudioBackendMode, AudioEngine, find_input_device, find_output_device, list_input_devices,
+    list_output_devices,
 };
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -41,31 +41,27 @@ async fn test_diagnose_jabra() {
     use cpal::traits::DeviceTrait;
 
     if let Ok(dev) = find_input_device(Some("Jabra Evolve2 30 SE, USB Audio")) {
-        println!("Found Jabra input dev desc: {:?}", dev.description().map(|d| d.name().to_string()));
+        println!(
+            "Found Jabra input dev desc: {:?}",
+            dev.description().map(|d| d.name().to_string())
+        );
         if let Ok(cfg) = dev.default_input_config() {
             let mut stream_cfg: cpal::StreamConfig = cfg.clone().into();
             stream_cfg.buffer_size = cpal::BufferSize::Fixed(1024);
-            let res = dev.build_input_stream(
-                stream_cfg,
-                |_: &[f32], _| {},
-                |_| {},
-                None,
-            );
+            let res = dev.build_input_stream(stream_cfg, |_: &[f32], _| {}, |_| {}, None);
             println!("build_input_stream with Fixed(1024): {:?}", res.is_ok());
         }
     }
 
     if let Ok(dev) = find_output_device(Some("Jabra Evolve2 30 SE, USB Audio")) {
-        println!("Found Jabra output dev desc: {:?}", dev.description().map(|d| d.name().to_string()));
+        println!(
+            "Found Jabra output dev desc: {:?}",
+            dev.description().map(|d| d.name().to_string())
+        );
         if let Ok(cfg) = dev.default_output_config() {
             let mut stream_cfg: cpal::StreamConfig = cfg.clone().into();
             stream_cfg.buffer_size = cpal::BufferSize::Fixed(1024);
-            let res = dev.build_output_stream(
-                stream_cfg,
-                |_: &mut [f32], _| {},
-                |_| {},
-                None,
-            );
+            let res = dev.build_output_stream(stream_cfg, |_: &mut [f32], _| {}, |_| {}, None);
             println!("build_output_stream with Fixed(1024): {:?}", res.is_ok());
         }
     }
@@ -93,7 +89,8 @@ async fn test_jabra_hardware_capture_and_playback() {
             let mut frame = Vec::with_capacity(160);
             for i in 0..160 {
                 let t = (tick * 160 + i) as f32 / 8000.0;
-                let sample = (32767.0 * 0.3 * (2.0 * std::f32::consts::PI * 425.0 * t).sin()) as i16;
+                let sample =
+                    (32767.0 * 0.3 * (2.0 * std::f32::consts::PI * 425.0 * t).sin()) as i16;
                 frame.push(sample);
             }
             if out_tx.send(frame).await.is_err() {
@@ -217,11 +214,22 @@ async fn test_real_hardware_audio_engine() {
 
 #[test]
 fn test_ringtone_generation() {
-    use sip_audio::ringtone::{generate_ringtone_frames, SAMPLES_PER_FRAME};
+    use sip_audio::ringtone::{SAMPLES_PER_FRAME, generate_ringtone_frames};
 
-    for ringtone in &["marimba", "classic_bell", "acoustic", "standard_tone", "ocean", "custom"] {
+    for ringtone in &[
+        "marimba",
+        "classic_bell",
+        "acoustic",
+        "standard_tone",
+        "ocean",
+        "custom",
+    ] {
         let frames = generate_ringtone_frames(ringtone, None, 80);
-        assert!(!frames.is_empty(), "Ringtone {} produced empty frames", ringtone);
+        assert!(
+            !frames.is_empty(),
+            "Ringtone {} produced empty frames",
+            ringtone
+        );
         for frame in &frames {
             assert_eq!(frame.len(), SAMPLES_PER_FRAME);
         }
@@ -231,4 +239,3 @@ fn test_ringtone_generation() {
     let silent_frames = generate_ringtone_frames("marimba", None, 0);
     assert!(silent_frames.iter().all(|f| f.iter().all(|&s| s == 0)));
 }
-

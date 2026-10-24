@@ -1,12 +1,12 @@
 use crate::device::{find_input_device, find_output_device};
 use crate::error::AudioError;
 use crate::resampler::{InputResampler, OutputResampler};
-use cpal::traits::{DeviceTrait, StreamTrait};
 use cpal::Stream;
+use cpal::traits::{DeviceTrait, StreamTrait};
 use rtrb::RingBuffer;
 use std::f32::consts::PI;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -218,7 +218,10 @@ impl AudioEngine {
                         samples_captured.fetch_add(160, Ordering::Relaxed);
                         frames_captured_count += 1;
                         if frames_captured_count == 1 || frames_captured_count % 250 == 0 {
-                            info!(frames_captured_count, "Hardware input capture delivering frames to engine");
+                            info!(
+                                frames_captured_count,
+                                "Hardware input capture delivering frames to engine"
+                            );
                         }
                         if tx.send(chunk).await.is_err() {
                             return;
@@ -298,7 +301,10 @@ impl AudioEngine {
         let default_config = match device.default_output_config() {
             Ok(c) => c,
             Err(e) => {
-                warn!("Failed to query default output config ({}), falling back to synthetic playback", e);
+                warn!(
+                    "Failed to query default output config ({}), falling back to synthetic playback",
+                    e
+                );
                 return self.start_synthetic_output(rx);
             }
         };
@@ -383,7 +389,10 @@ impl AudioEngine {
             while let Some(frame) = rx.recv().await {
                 frames_played_count += 1;
                 if frames_played_count == 1 || frames_played_count % 250 == 0 {
-                    info!(frames_played_count, "Hardware output playback receiving frames from engine");
+                    info!(
+                        frames_played_count,
+                        "Hardware output playback receiving frames from engine"
+                    );
                 }
                 let count = frame.len() as u64;
                 for sample in frame {

@@ -63,27 +63,30 @@ When you launch Plasma SIP for the first time, the **Account Setup Wizard** open
 ## 3. Making and Receiving Calls
 
 ### Dialing a Call
-1. Click on the **Dial Pad** tab on the left navigation bar.
+1. Click on the **Keypad** tab (`Ctrl+1`) on the bottom navigation bar.
 2. Enter the phone number or SIP extension using either:
    - Your keyboard (numbers `0-9`, `*`, `#`)
-   - Clicking the on-screen numeric dial pad buttons
-3. Examples of valid numbers:
+   - Clicking the on-screen squircle dial pad buttons
+3. Real-time **T9 & Contact Suggestions**:
+   - As you type numbers, matching contacts from your phonebook automatically appear in the suggestion bar above the keypad.
+   - Click any suggested contact chip to populate the number immediately.
+4. Examples of valid numbers:
    - **FRITZ!Box Internal Extension:** `**621` or `**1`
    - **Standard National Number:** `030 23125000`, `0172 9925904`, or `0172 9968532` (official Bundesnetzagentur drama numbers)
    - **International E.164 Number:** `+49 30 23125000`, `+49 172 9925904`, or `+49 172 9968532`
    *(Notice: These format examples cite official [Bundesnetzagentur Drama Numbers](https://www.bundesnetzagentur.de/DE/Fachthemen/Telekommunikation/Nummerierung/DramaNumbers/artikel.html) reserved for media and documentation).*
-4. Click the green **Call** button (or press `Enter`).
+5. Click the green **Call** button (or press `Enter`).
 
 ### Incoming Calls
 When someone calls your number:
-- A KDE Plasma desktop notification appears with the caller ID.
+- A KDE Plasma desktop notification appears with the resolved caller name and number.
 - An incoming call banner pops up in the application window.
 - Click **Answer** (green phone) to accept the call.
 - Click **Decline** (red phone) to send a busy/reject signal.
 
 ### Active Call Controls
 During a call, the active call screen provides:
-- **Remote Party Information:** Displays number and display name.
+- **Remote Party Information:** Displays contact name and phone number.
 - **Call Timer:** Live duration of the active call.
 - **Mute Microphone:** Toggles local microphone input on and off.
 - **In-Call Keypad (DTMF):** Send touch-tones (RFC 4733) for automated telephone menus (IVRs) and voicemail prompts.
@@ -91,26 +94,36 @@ During a call, the active call screen provides:
 
 ---
 
-## 4. Audio Settings & Device Selection
+## 4. Contacts & AVM FRITZ!Box Phonebook Synchronization
 
-Navigate to **Audio Settings** in the left sidebar to:
-- Choose your preferred **Microphone (Input Device)**.
-- Choose your preferred **Speaker / Headset (Output Device)**.
-- Test audio devices with a synthetic test tone.
-- Plasma SIP integrates natively with **PipeWire** and **PulseAudio**, automatically switching playback routing when a USB headset is plugged in.
+Plasma SIP features built-in TR-064 phonebook synchronization:
+- Navigate to the **Contacts** tab (`Ctrl+3`).
+- Click **Sync FRITZ!Box** to pull your entire address book directly from your FRITZ!Box router (`http://fritz.box:49000`) using your existing SIP credentials.
+- **Instant Search:** Type any name or number in the search bar. Supports full T9 keypad predictive matching.
+- **Direct Calling:** Click the call icon on any number (`Home`, `Mobile`, `Work`, `Internal`) to place a call immediately.
+- **Caller ID Resolution:** Synchronized contacts are automatically matched against incoming callers and call history logs.
 
 ---
 
 ## 5. Call History
 
-Navigate to the **History** tab:
-- Review past **Incoming**, **Outgoing**, and **Missed** calls with timestamps and call duration.
+Navigate to the **History** tab (`Ctrl+2`):
+- Review past **Incoming**, **Outgoing**, and **Missed** calls with resolved contact names, timestamps, and call duration.
 - Click on any contact or phone number to redial instantly.
 - Click **Clear History** to purge all stored call records.
 
 ---
 
-## 6. Background Telephony Daemon (`plasma-sipd`)
+## 6. Settings & Audio Configuration
+
+Navigate to the **Settings** tab (`Ctrl+4`):
+- **Accounts & PBX:** Add or edit FRITZ!Box and generic SIP provider accounts.
+- **Phonebook & FRITZ!Box:** Check synchronization status, trigger manual sync, and configure call rejection response codes (`603 Decline`, `486 Busy Here`, `480 Temporarily Unavailable`).
+- **Audio & Devices:** Select preferred input/output audio devices, test ringtones, and toggle silent mode.
+
+---
+
+## 7. Background Telephony Daemon (`plasma-sipd`)
 
 Plasma SIP runs a lightweight background daemon so you never miss a call.
 To manage the service using systemd:

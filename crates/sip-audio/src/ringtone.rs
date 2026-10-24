@@ -116,12 +116,7 @@ pub fn load_audio_file(path: &str) -> Result<Vec<i16>, RingtoneLoadErrorKind> {
     // Try decoding with ffmpeg
     if let Ok(output) = Command::new("ffmpeg")
         .args([
-            "-v", "error",
-            "-i", path,
-            "-f", "s16le",
-            "-ac", "1",
-            "-ar", "8000",
-            "pipe:1",
+            "-v", "error", "-i", path, "-f", "s16le", "-ac", "1", "-ar", "8000", "pipe:1",
         ])
         .output()
     {
@@ -220,7 +215,9 @@ fn decode_wav_file(path: &Path) -> Result<Vec<i16>, RingtoneLoadErrorKind> {
                     s as f32 / 32768.0
                 }
                 24 => {
-                    let s = i32::from_le_bytes([0, raw[s_start], raw[s_start + 1], raw[s_start + 2]]) >> 8;
+                    let s =
+                        i32::from_le_bytes([0, raw[s_start], raw[s_start + 1], raw[s_start + 2]])
+                            >> 8;
                     s as f32 / 8388608.0
                 }
                 32 => {
@@ -317,7 +314,8 @@ fn synth_marimba() -> Vec<i16> {
 
             let sample_val = (wave * env * 24000.0) as i32;
             let current = samples[target_idx] as i32;
-            samples[target_idx] = (current + sample_val).clamp(i16::MIN as i32, i16::MAX as i32) as i16;
+            samples[target_idx] =
+                (current + sample_val).clamp(i16::MIN as i32, i16::MAX as i32) as i16;
         }
     }
 
@@ -383,12 +381,13 @@ fn synth_acoustic() -> Vec<i16> {
             let decay = (-3.0 * dt).exp();
             let env = attack * decay;
 
-            let wave = 0.70 * (2.0 * PI * freq * dt).sin()
-                + 0.30 * (2.0 * PI * (2.0 * freq) * dt).sin();
+            let wave =
+                0.70 * (2.0 * PI * freq * dt).sin() + 0.30 * (2.0 * PI * (2.0 * freq) * dt).sin();
 
             let sample_val = (wave * env * 22000.0) as i32;
             let current = samples[target_idx] as i32;
-            samples[target_idx] = (current + sample_val).clamp(i16::MIN as i32, i16::MAX as i32) as i16;
+            samples[target_idx] =
+                (current + sample_val).clamp(i16::MIN as i32, i16::MAX as i32) as i16;
         }
     }
 

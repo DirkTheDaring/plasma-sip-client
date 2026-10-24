@@ -13,8 +13,8 @@
 //!   - "Quit Plasma SIP"
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 use tokio::sync::RwLock;
 use tracing::{info, warn};
 use zbus::interface;
@@ -196,7 +196,7 @@ impl StatusNotifierItemService {
 
     #[zbus(signal)]
     pub async fn new_icon(signal_ctxt: &zbus::object_server::SignalEmitter<'_>)
-        -> zbus::Result<()>;
+    -> zbus::Result<()>;
 
     #[zbus(signal)]
     pub async fn new_attention_icon(
@@ -631,7 +631,10 @@ pub async fn setup_tray(
         warn!(error = %e, "Failed to register /org/kde/plasma_sip/ui");
     } else {
         match conn.request_name("org.kde.plasma_sip.ui").await {
-            Ok(reply) => info!(?reply, "Registered /org/kde/plasma_sip/ui single-instance IPC service"),
+            Ok(reply) => info!(
+                ?reply,
+                "Registered /org/kde/plasma_sip/ui single-instance IPC service"
+            ),
             Err(e) => warn!(error = %e, "Failed to request D-Bus name org.kde.plasma_sip.ui"),
         }
     }

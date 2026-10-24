@@ -1949,8 +1949,10 @@ name = "sip-providers"
 version = "1.0.0"
 dependencies = [
  "serde",
+ "sip-auth",
  "sip-domain",
  "thiserror 2.0.21",
+ "tokio",
  "tracing",
 ]
 

@@ -264,7 +264,13 @@ mod tests {
         // Playout is paused (e.g. downstream channel blocked).
         // 10 new packets arrive (seq 3 to 12).
         for seq in 3..=12 {
-            jb.push(RtpPacket::new(8, seq, (seq as u32) * 160, 1, Bytes::from_static(b"d")));
+            jb.push(RtpPacket::new(
+                8,
+                seq,
+                (seq as u32) * 160,
+                1,
+                Bytes::from_static(b"d"),
+            ));
         }
 
         // Capacity was 5, so packets 3..7 were evicted. Buffer now holds 8..12.

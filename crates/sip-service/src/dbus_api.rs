@@ -371,10 +371,16 @@ impl PlasmaSipDbusService {
                     .into_iter()
                     .map(|entry| {
                         let party = sip_protocol::SipPartyInfo::parse(&entry.remote_party);
-                        let (display_name, phone_number, display_string) = match party {
+                        let (raw_display_name, phone_number, display_string) = match party {
                             Some(p) => (p.display_name, p.number_or_user, p.display_string),
                             None => (None, entry.remote_party.clone(), entry.remote_party.clone()),
                         };
+                        let display_name = raw_display_name.or_else(|| {
+                            self.storage
+                                .resolve_caller_name(&phone_number)
+                                .ok()
+                                .flatten()
+                        });
                         serde_json::json!({
                             "id": entry.id.to_string(),
                             "account_id": entry.account_id.to_string(),
@@ -410,6 +416,52 @@ impl PlasmaSipDbusService {
         }
     }
 
+    // -------------------------------------------------------------------------
+    // Contacts & Phonebook APIs
+    // -------------------------------------------------------------------------
+
+    /// List all contacts as a JSON array string
+    async fn list_contacts(&self) -> String {
+        match self.storage.list_contacts() {
+            Ok(contacts) => serde_json::to_string(&contacts).unwrap_or_else(|_| "[]".into()),
+            Err(e) => format!("Error: {}", e),
+        }
+    }
+
+    /// Search contacts by name, number, or T9 query
+    async fn search_contacts(&self, query: &str) -> String {
+        match self.storage.search_contacts(query) {
+            Ok(contacts) => serde_json::to_string(&contacts).unwrap_or_else(|_| "[]".into()),
+            Err(e) => format!("Error: {}", e),
+        }
+    }
+
+    /// Resolve a phone number to a contact display name (or empty string if not found)
+    async fn resolve_caller_name(&self, number: &str) -> String {
+        match self.storage.resolve_caller_name(number) {
+            Ok(Some(name)) => name,
+            _ => String::new(),
+        }
+    }
+
+    /// Synchronize contacts from AVM FRITZ!Box TR-064 interface
+    async fn sync_phonebook(&self) -> String {
+        match self.do_sync_phonebook().await {
+            Ok(count) => serde_json::json!({
+                "success": true,
+                "count": count,
+                "error": null
+            })
+            .to_string(),
+            Err(e) => serde_json::json!({
+                "success": false,
+                "count": 0,
+                "error": e.to_string()
+            })
+            .to_string(),
+        }
+    }
+
     /// Signal emitted when an account's registration state changes
     #[zbus(signal)]
     pub async fn registration_changed(
@@ -432,6 +484,12 @@ impl PlasmaSipDbusService {
         signal_ctxt: &zbus::object_server::SignalEmitter<'_>,
         call_id: &str,
         state: &str,
+    ) -> zbus::Result<()>;
+
+    /// Signal emitted when phonebook contacts have been synchronized or modified
+    #[zbus(signal)]
+    pub async fn contacts_changed(
+        signal_ctxt: &zbus::object_server::SignalEmitter<'_>,
     ) -> zbus::Result<()>;
 
     /// Signal emitted to request opening/raising the graphical user interface window
@@ -537,5 +595,53 @@ impl PlasmaSipDbusService {
                 }
             }
         })
+    }
+
+    /// Synchronizes phonebook contacts from the configured AVM FRITZ!Box router.
+    pub async fn do_sync_phonebook(&self) -> Result<usize, String> {
+        let accounts = self.storage.list_accounts().map_err(|e| e.to_string())?;
+        let fb_account = accounts
+            .into_iter()
+            .find(|a| {
+                a.domain.to_lowercase().contains("fritz")
+                    || a.registrar.to_lowercase().contains("fritz")
+                    || a.name.to_lowercase().contains("fritz")
+            })
+            .ok_or_else(|| {
+                "No AVM FRITZ!Box SIP account found. Please configure your FRITZ!Box account first."
+                    .to_string()
+            })?;
+
+        let password = self
+            .storage
+            .get_account_secret(fb_account.id)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| "No stored password found for FRITZ!Box account.".to_string())?;
+
+        let host = if !fb_account.registrar.is_empty() {
+            &fb_account.registrar
+        } else {
+            &fb_account.domain
+        };
+
+        let client = sip_providers::FritzBoxTr064Client::new(host, 49000);
+        let contacts = client
+            .fetch_phonebook(&fb_account.username, &password, 0)
+            .await
+            .map_err(|e| format!("FRITZ!Box TR-064 sync failed: {}", e))?;
+
+        let count = contacts.len();
+        self.storage
+            .clear_fritzbox_contacts()
+            .map_err(|e| e.to_string())?;
+        self.storage
+            .upsert_contacts(&contacts)
+            .map_err(|e| e.to_string())?;
+
+        tracing::info!(
+            "Successfully synchronized {} contacts from FRITZ!Box phonebook",
+            count
+        );
+        Ok(count)
     }
 }

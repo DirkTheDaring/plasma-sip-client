@@ -6,6 +6,9 @@ license.workspace = true
 
 [dependencies]
 sip-domain = { workspace = true }
+sip-auth = { workspace = true }
+tokio = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }
 tracing = { workspace = true }
+

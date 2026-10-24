@@ -19,6 +19,8 @@ fn test_qml_interface_files_exist_and_valid() {
         "AccountWizardView.qml",
         "CallHistoryView.qml",
         "AudioSettingsView.qml",
+        "ContactsView.qml",
+        "SettingsView.qml",
     ];
 
     for file_name in &required_files {
@@ -162,4 +164,62 @@ fn test_account_wizard_fritzbox_and_generic() {
         "Must support Generic SIP profile"
     );
     assert!(content.contains("Password"), "Must mask password input");
+}
+
+#[test]
+fn test_contacts_view_elements_and_sync() {
+    let path = if Path::new("../../qml/ContactsView.qml").exists() {
+        "../../qml/ContactsView.qml"
+    } else {
+        "qml/ContactsView.qml"
+    };
+    let content = fs::read_to_string(path).expect("read ContactsView.qml");
+
+    assert!(
+        content.contains("sync_phonebook"),
+        "Must provide sync_phonebook trigger"
+    );
+    assert!(
+        content.contains("search_contacts"),
+        "Must provide search_contacts hook"
+    );
+    assert!(
+        content.contains("getAvatarColor"),
+        "Must provide deterministic avatar color calculation"
+    );
+    assert!(
+        content.contains("startCallRequested"),
+        "Must provide startCallRequested signal"
+    );
+    assert!(
+        content.contains("prefillRequested"),
+        "Must provide prefillRequested signal"
+    );
+}
+
+#[test]
+fn test_settings_view_elements_and_sections() {
+    let path = if Path::new("../../qml/SettingsView.qml").exists() {
+        "../../qml/SettingsView.qml"
+    } else {
+        "qml/SettingsView.qml"
+    };
+    let content = fs::read_to_string(path).expect("read SettingsView.qml");
+
+    assert!(
+        content.contains("AccountWizardView"),
+        "Must embed AccountWizardView"
+    );
+    assert!(
+        content.contains("AudioSettingsView"),
+        "Must embed AudioSettingsView"
+    );
+    assert!(
+        content.contains("sync_phonebook"),
+        "Must support phonebook sync action"
+    );
+    assert!(
+        content.contains("change_reject_mode"),
+        "Must support call reject mode configuration"
+    );
 }

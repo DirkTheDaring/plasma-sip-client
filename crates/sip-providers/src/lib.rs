@@ -1,5 +1,8 @@
 //! Telephony provider profiles for FRITZ!Box PBX and Generic SIP.
 
+pub mod fritzbox_tr064;
+pub use fritzbox_tr064::*;
+
 use sip_domain::{DialTarget, DomainError, ProviderKind, SipAccount};
 
 pub trait SipProviderProfile: Send + Sync {
@@ -224,14 +227,20 @@ mod tests {
         assert_eq!(t2.normalized_sip_uri, "sip:alice@sip.example.com");
 
         // CRLF / header injection attempt must fail
-        assert!(provider
-            .normalize_dial_target("sip:alice@sip.example.com\r\nInjected: true", &account)
-            .is_err());
-        assert!(provider
-            .normalize_dial_target("sip:alice@sip.example.com\nInjected: true", &account)
-            .is_err());
-        assert!(provider
-            .normalize_dial_target("sip:alice with spaces", &account)
-            .is_err());
+        assert!(
+            provider
+                .normalize_dial_target("sip:alice@sip.example.com\r\nInjected: true", &account)
+                .is_err()
+        );
+        assert!(
+            provider
+                .normalize_dial_target("sip:alice@sip.example.com\nInjected: true", &account)
+                .is_err()
+        );
+        assert!(
+            provider
+                .normalize_dial_target("sip:alice with spaces", &account)
+                .is_err()
+        );
     }
 }

@@ -10,8 +10,8 @@
 //! - Deletion lifecycle ensuring network unregistration before database cleanup.
 
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::net::UdpSocket;
 
 use sip_domain::{AccountId, RegistrationState, SipAccount, TransportProtocol};
@@ -102,7 +102,15 @@ impl LocalRegistrarFixture {
                         if !reject_credentials && auth_hdr.contains("username=\"620\"") {
                             let ok_resp = format!(
                                 "SIP/2.0 200 OK\r\nVia: {}\r\nFrom: {}\r\nTo: {};tag=pbx-srv-1\r\nCall-ID: {}\r\nCSeq: {}\r\nContact: <sip:620@{}:{}>;expires={}\r\nExpires: {}\r\nContent-Length: 0\r\n\r\n",
-                                via, from, to, call_id, cseq, client_addr.ip(), client_addr.port(), expires, expires
+                                via,
+                                from,
+                                to,
+                                call_id,
+                                cseq,
+                                client_addr.ip(),
+                                client_addr.port(),
+                                expires,
+                                expires
                             );
                             let _ = socket.send_to(ok_resp.as_bytes(), client_addr).await;
                         } else {
@@ -132,7 +140,10 @@ async fn setup_test_environment() -> (
     Arc<AccountManager>,
 ) {
     let storage = Arc::new(StorageManager::new_in_memory().expect("in-memory db"));
-    assert!(storage.is_isolated_backend(), "Must use isolated credential backend");
+    assert!(
+        storage.is_isolated_backend(),
+        "Must use isolated credential backend"
+    );
     let transport = Arc::new(
         SipUdpTransport::bind("127.0.0.1:0")
             .await

@@ -26,6 +26,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         | Some("hangup")
         | Some("history")
         | Some("devices")
+        | Some("contacts")
+        | Some("sync-phonebook")
         | Some("status") => {
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
@@ -127,6 +129,8 @@ fn print_usage() {
     println!("  hangup [call_id]                 Hang up active call");
     println!("  history [limit]                  Show recent call history");
     println!("  devices                          List audio input and output devices");
+    println!("  contacts [query]                 List contacts or search by name/number");
+    println!("  sync-phonebook                   Synchronize phonebook from FRITZ!Box");
     println!("  help                             Display this help message");
 }
 
@@ -233,6 +237,48 @@ async fn run_cli(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
                 .body()
                 .deserialize()?;
             println!("Audio Devices:\n{}", reply);
+        }
+        "contacts" => {
+            let query = args.get(2).map(|s| s.as_str()).unwrap_or("");
+            let reply: String = if query.is_empty() {
+                conn.call_method(
+                    Some("org.kde.PlasmaSip"),
+                    "/org/kde/PlasmaSip",
+                    Some("org.kde.PlasmaSip"),
+                    "ListContacts",
+                    &(),
+                )
+                .await?
+                .body()
+                .deserialize()?
+            } else {
+                conn.call_method(
+                    Some("org.kde.PlasmaSip"),
+                    "/org/kde/PlasmaSip",
+                    Some("org.kde.PlasmaSip"),
+                    "SearchContacts",
+                    &(query),
+                )
+                .await?
+                .body()
+                .deserialize()?
+            };
+            println!("Contacts:\n{}", reply);
+        }
+        "sync-phonebook" => {
+            println!("Synchronizing phonebook with PBX / FRITZ!Box...");
+            let reply: String = conn
+                .call_method(
+                    Some("org.kde.PlasmaSip"),
+                    "/org/kde/PlasmaSip",
+                    Some("org.kde.PlasmaSip"),
+                    "SyncPhonebook",
+                    &(),
+                )
+                .await?
+                .body()
+                .deserialize()?;
+            println!("Sync result: {}", reply);
         }
         "status" => {
             let reply: String = conn

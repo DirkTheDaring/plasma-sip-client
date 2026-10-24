@@ -2,15 +2,15 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{Mutex, mpsc};
 use tracing::{debug, info, trace};
 use zeroize::Zeroizing;
 
 use sip_auth::{DigestAuthorizer, DigestChallenge};
 use sip_domain::{RegistrationState, SipAccount};
 use sip_protocol::{
-    generate_branch, generate_tag, SipMethod, SipRequest, SipResponse, TransactionKey,
-    TransactionManager,
+    SipMethod, SipRequest, SipResponse, TransactionKey, TransactionManager, generate_branch,
+    generate_tag,
 };
 use sip_transport::SipUdpTransport;
 

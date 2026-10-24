@@ -59,7 +59,10 @@ fn test_r7_first_run_configuration_and_permissions() {
     // Initialize StorageManager for first time with isolated in-memory credential backend
     let backend = Arc::new(InMemoryCredentialBackend::new());
     let storage = StorageManager::new_with_backend(&db_path, backend).expect("init storage");
-    assert!(storage.is_isolated_backend(), "Storage must use isolated credential backend");
+    assert!(
+        storage.is_isolated_backend(),
+        "Storage must use isolated credential backend"
+    );
 
     // Verify directory permissions are 0o700
     let dir_perms = fs::metadata(&data_dir).unwrap().permissions().mode() & 0o777;
@@ -69,9 +72,9 @@ fn test_r7_first_run_configuration_and_permissions() {
     let db_perms = fs::metadata(&db_path).unwrap().permissions().mode() & 0o777;
     assert_eq!(db_perms, 0o600, "Database file must be 0600");
 
-    // Verify initial schema version is 1
+    // Verify initial schema version is 3 (accounts, credentials, contacts)
     let version = storage.schema_version().expect("get schema version");
-    assert_eq!(version, 2, "Schema version must be 2 on first run");
+    assert_eq!(version, 3, "Schema version must be 3 on first run");
 
     // Create an account
     let account = SipAccount {
@@ -113,9 +116,12 @@ fn test_r7_database_upgrade_and_migration() {
     // Now open with StorageManager to trigger automatic migration
     let backend = Arc::new(InMemoryCredentialBackend::new());
     let storage = StorageManager::new_with_backend(&db_path, backend).expect("open with migration");
-    assert!(storage.is_isolated_backend(), "Storage must use isolated credential backend");
+    assert!(
+        storage.is_isolated_backend(),
+        "Storage must use isolated credential backend"
+    );
     let upgraded_version = storage.schema_version().expect("get upgraded version");
-    assert_eq!(upgraded_version, 2, "Schema must be upgraded to version 2");
+    assert_eq!(upgraded_version, 3, "Schema must be upgraded to version 3");
 
     // Verify writing and reading after migration
     let entry = CallLogEntry {
@@ -144,8 +150,12 @@ fn test_r7_daemon_restart_and_recovery() {
 
     // 1. Initial daemon run: save account and state
     {
-        let storage = StorageManager::new_with_backend(&db_path, backend.clone()).expect("init storage");
-        assert!(storage.is_isolated_backend(), "Storage must use isolated credential backend");
+        let storage =
+            StorageManager::new_with_backend(&db_path, backend.clone()).expect("init storage");
+        assert!(
+            storage.is_isolated_backend(),
+            "Storage must use isolated credential backend"
+        );
         let account = SipAccount {
             id: account_id,
             name: "Persistent Account".to_string(),
@@ -165,7 +175,10 @@ fn test_r7_daemon_restart_and_recovery() {
     // 2. Restarted daemon run: reopen database and verify recovery
     {
         let storage = StorageManager::new_with_backend(&db_path, backend).expect("reopen storage");
-        assert!(storage.is_isolated_backend(), "Storage must use isolated credential backend");
+        assert!(
+            storage.is_isolated_backend(),
+            "Storage must use isolated credential backend"
+        );
         let recovered = storage
             .get_account(account_id)
             .expect("fetch account")

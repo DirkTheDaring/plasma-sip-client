@@ -20,10 +20,11 @@
 
 - **100% Pure Rust:** Zero legacy C/C++ SIP libraries. Memory safe, highly concurrent, and leak-free.
 - **AVM FRITZ!Box Ready:** Native support for local FRITZ!Box PBX registration, internal extension dialing (`**620`), and local IP phone authentication.
+- **Phonebook & Contacts Sync:** Built-in TR-064 client synchronizes contact books directly from AVM FRITZ!Boxes and local PBXs into an encrypted SQLite store with T9 quick-search, vanity numbers, and automatic caller name resolution.
+- **Convergent 4-Tab Interface:** Streamlined KDE Plasma 6 Kirigami navigation (Keypad, Call History, Contacts, Settings) with ergonomic squircle keypad buttons, real-time extension previews, and seamless theme integration.
 - **Provider Agnostic:** Clean provider profile abstraction seamlessly connects with Asterisk, FreePBX, and standard VoIP/SIP services.
 - **Native PipeWire Integration:** Low-latency audio processing using pure Rust ITU-T G.711 PCMA/PCMU and lock-free ringbuffers.
 - **Background Daemon (`plasma-sipd`):** Uninterrupted call reception and registration maintenance independent of the graphical UI.
-- **KDE Plasma 6 UI (`plasma-sip`):** Modern Kirigami 6 user interface supporting Breeze light/dark themes, responsive sizing, dial pad, call history, and native desktop notifications.
 - **KWallet / Secret Service Security:** Passwords and credentials are never stored in plaintext on disk.
 - **Strict Non-Root Policy:** Security-by-design architecture that strictly enforces user-session execution.
 

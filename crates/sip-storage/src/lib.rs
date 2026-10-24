@@ -2,14 +2,16 @@
 
 use chrono::{DateTime, Utc};
 use keyring::Entry;
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
 use uuid::Uuid;
 
 use sip_domain::{
-    AccountId, AudioConfig, CallDirection, CallId, CallRejectMode, SipAccount, TransportProtocol,
+    AccountId, AudioConfig, CallDirection, CallId, CallRejectMode, Contact, ContactId,
+    ContactNumber, ContactSource, NumberType, SipAccount, TransportProtocol,
+    normalize_number_digits, text_to_t9,
 };
 
 #[derive(Error, Debug)]
@@ -45,7 +47,7 @@ pub trait CredentialBackend: Send + Sync {
 fn is_running_under_test() -> bool {
     #[cfg(test)]
     {
-        return true;
+        true
     }
     #[cfg(not(test))]
     {
@@ -71,7 +73,8 @@ impl CredentialBackend for KeyringCredentialBackend {
     fn save_secret(&self, id: AccountId, password: &str) -> Result<(), StorageError> {
         if is_running_under_test() {
             return Err(StorageError::Keyring(keyring::Error::PlatformFailure(
-                "Safety guard: Host keyring access is strictly prohibited during test execution.".into(),
+                "Safety guard: Host keyring access is strictly prohibited during test execution."
+                    .into(),
             )));
         }
         let service = "org.kde.PlasmaSip";
@@ -84,7 +87,8 @@ impl CredentialBackend for KeyringCredentialBackend {
     fn get_secret(&self, id: AccountId) -> Result<Option<String>, StorageError> {
         if is_running_under_test() {
             return Err(StorageError::Keyring(keyring::Error::PlatformFailure(
-                "Safety guard: Host keyring access is strictly prohibited during test execution.".into(),
+                "Safety guard: Host keyring access is strictly prohibited during test execution."
+                    .into(),
             )));
         }
         let service = "org.kde.PlasmaSip";
@@ -100,7 +104,8 @@ impl CredentialBackend for KeyringCredentialBackend {
     fn delete_secret(&self, id: AccountId) -> Result<(), StorageError> {
         if is_running_under_test() {
             return Err(StorageError::Keyring(keyring::Error::PlatformFailure(
-                "Safety guard: Host keyring access is strictly prohibited during test execution.".into(),
+                "Safety guard: Host keyring access is strictly prohibited during test execution."
+                    .into(),
             )));
         }
         let service = "org.kde.PlasmaSip";
@@ -253,6 +258,36 @@ impl StorageManager {
                     password TEXT NOT NULL
                 );
                 PRAGMA user_version = 2;
+                "#,
+            )?;
+        }
+
+        if user_version < 3 {
+            conn.execute_batch(
+                r#"
+                CREATE TABLE IF NOT EXISTS contacts (
+                    id TEXT PRIMARY KEY,
+                    display_name TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    fritzbox_unique_id TEXT,
+                    updated_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS contact_numbers (
+                    id TEXT PRIMARY KEY,
+                    contact_id TEXT NOT NULL,
+                    raw_number TEXT NOT NULL,
+                    normalized_digits TEXT NOT NULL,
+                    number_type TEXT NOT NULL,
+                    quickdial TEXT,
+                    vanity TEXT,
+                    FOREIGN KEY(contact_id) REFERENCES contacts(id) ON DELETE CASCADE
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_contact_numbers_norm ON contact_numbers(normalized_digits);
+                CREATE INDEX IF NOT EXISTS idx_contact_numbers_cid ON contact_numbers(contact_id);
+                CREATE INDEX IF NOT EXISTS idx_contacts_name ON contacts(display_name);
+                PRAGMA user_version = 3;
                 "#,
             )?;
         }
@@ -464,10 +499,12 @@ impl StorageManager {
 
     pub fn delete_call_log(&self, id: &CallId) -> Result<(), StorageError> {
         let conn = self.conn.lock().unwrap();
-        conn.execute("DELETE FROM call_history WHERE id = ?1", params![id.to_string()])?;
+        conn.execute(
+            "DELETE FROM call_history WHERE id = ?1",
+            params![id.to_string()],
+        )?;
         Ok(())
     }
-
 
     /// Stores account credentials persistently in SQLite and synchronizes to Keyring (best-effort).
     pub fn save_account_secret(&self, id: AccountId, password: &str) -> Result<(), StorageError> {
@@ -493,7 +530,8 @@ impl StorageManager {
 
         // Fallback to SQLite secure database
         let conn = self.conn.lock().unwrap();
-        let mut stmt = conn.prepare("SELECT password FROM account_credentials WHERE account_id = ?1")?;
+        let mut stmt =
+            conn.prepare("SELECT password FROM account_credentials WHERE account_id = ?1")?;
         let mut rows = stmt.query(params![id.to_string()])?;
         if let Some(row) = rows.next()? {
             let pw: String = row.get(0)?;
@@ -563,6 +601,243 @@ impl StorageManager {
     pub fn save_reject_mode(&self, mode: CallRejectMode) -> Result<(), StorageError> {
         self.set_setting("reject_mode", mode.as_str())
     }
+
+    // -------------------------------------------------------------------------
+    // Contact persistence & Caller ID Lookup
+    // -------------------------------------------------------------------------
+
+    pub fn save_contact(&self, contact: &Contact) -> Result<(), StorageError> {
+        self.upsert_contacts(std::slice::from_ref(contact))
+    }
+
+    pub fn upsert_contacts(&self, contacts: &[Contact]) -> Result<(), StorageError> {
+        let mut conn = self.conn.lock().unwrap();
+        let tx = conn.transaction()?;
+
+        for contact in contacts {
+            tx.execute(
+                r#"
+                INSERT OR REPLACE INTO contacts (id, display_name, source, fritzbox_unique_id, updated_at)
+                VALUES (?1, ?2, ?3, ?4, ?5)
+                "#,
+                params![
+                    contact.id.to_string(),
+                    contact.display_name,
+                    contact.source.to_string(),
+                    contact.fritzbox_unique_id,
+                    contact.updated_at.to_rfc3339(),
+                ],
+            )?;
+
+            tx.execute(
+                "DELETE FROM contact_numbers WHERE contact_id = ?1",
+                params![contact.id.to_string()],
+            )?;
+
+            for num in &contact.numbers {
+                let num_id = Uuid::new_v4().to_string();
+                tx.execute(
+                    r#"
+                    INSERT INTO contact_numbers (id, contact_id, raw_number, normalized_digits, number_type, quickdial, vanity)
+                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                    "#,
+                    params![
+                        num_id,
+                        contact.id.to_string(),
+                        num.raw_number,
+                        num.normalized_digits,
+                        num.number_type.to_string(),
+                        num.quickdial,
+                        num.vanity,
+                    ],
+                )?;
+            }
+        }
+
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn list_contacts(&self) -> Result<Vec<Contact>, StorageError> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, display_name, source, fritzbox_unique_id, updated_at FROM contacts ORDER BY display_name COLLATE NOCASE ASC"
+        )?;
+
+        let contact_rows = stmt.query_map([], |row| {
+            let id_str: String = row.get(0)?;
+            let id = Uuid::parse_str(&id_str)
+                .map(ContactId)
+                .unwrap_or_else(|_| ContactId::new());
+            let display_name: String = row.get(1)?;
+            let src_str: String = row.get(2)?;
+            let source = if src_str == "fritzbox" {
+                ContactSource::FritzBox
+            } else {
+                ContactSource::Local
+            };
+            let fritzbox_unique_id: Option<String> = row.get(3)?;
+            let time_str: String = row.get(4)?;
+            let updated_at = DateTime::parse_from_rfc3339(&time_str)
+                .map(|dt| dt.with_timezone(&Utc))
+                .unwrap_or_else(|_| Utc::now());
+
+            Ok((id, display_name, source, fritzbox_unique_id, updated_at))
+        })?;
+
+        let mut contacts = Vec::new();
+        for res in contact_rows {
+            let (id, display_name, source, fritzbox_unique_id, updated_at) = res?;
+
+            let mut num_stmt = conn.prepare(
+                "SELECT raw_number, normalized_digits, number_type, quickdial, vanity FROM contact_numbers WHERE contact_id = ?1"
+            )?;
+            let num_rows = num_stmt.query_map(params![id.to_string()], |nrow| {
+                let raw_number: String = nrow.get(0)?;
+                let normalized_digits: String = nrow.get(1)?;
+                let ntype_str: String = nrow.get(2)?;
+                let number_type = NumberType::from(ntype_str.as_str());
+                let quickdial: Option<String> = nrow.get(3)?;
+                let vanity: Option<String> = nrow.get(4)?;
+                Ok(ContactNumber {
+                    raw_number,
+                    normalized_digits,
+                    number_type,
+                    quickdial,
+                    vanity,
+                })
+            })?;
+
+            let mut numbers = Vec::new();
+            for n in num_rows {
+                numbers.push(n?);
+            }
+
+            contacts.push(Contact {
+                id,
+                display_name,
+                numbers,
+                source,
+                fritzbox_unique_id,
+                updated_at,
+            });
+        }
+
+        Ok(contacts)
+    }
+
+    pub fn search_contacts(&self, query: &str) -> Result<Vec<Contact>, StorageError> {
+        let q = query.trim();
+        if q.is_empty() {
+            return self.list_contacts();
+        }
+
+        let all = self.list_contacts()?;
+        let q_lower = q.to_lowercase();
+        let is_numeric = q
+            .chars()
+            .all(|c| c.is_ascii_digit() || c == '*' || c == '#');
+
+        let filtered: Vec<Contact> = all
+            .into_iter()
+            .filter(|c| {
+                if c.display_name.to_lowercase().contains(&q_lower) {
+                    return true;
+                }
+                for n in &c.numbers {
+                    if n.raw_number.contains(q) || n.normalized_digits.contains(q) {
+                        return true;
+                    }
+                    if let Some(ref qd) = n.quickdial {
+                        if qd.contains(q) {
+                            return true;
+                        }
+                    }
+                }
+                if is_numeric && q.len() >= 2 {
+                    let name_t9 = text_to_t9(&c.display_name);
+                    if name_t9.contains(q) {
+                        return true;
+                    }
+                }
+                false
+            })
+            .collect();
+
+        Ok(filtered)
+    }
+
+    pub fn resolve_caller_name(&self, raw_number: &str) -> Result<Option<String>, StorageError> {
+        let normalized = normalize_number_digits(raw_number);
+        if normalized.is_empty() {
+            return Ok(None);
+        }
+
+        let conn = self.conn.lock().unwrap();
+
+        // 1. Exact match on normalized_digits or quickdial or raw_number
+        let mut stmt = conn.prepare(
+            r#"
+            SELECT c.display_name
+            FROM contacts c
+            JOIN contact_numbers n ON c.id = n.contact_id
+            WHERE n.normalized_digits = ?1 OR n.quickdial = ?1 OR n.raw_number = ?1
+            LIMIT 1
+            "#,
+        )?;
+        let mut rows = stmt.query(params![normalized])?;
+        if let Some(row) = rows.next()? {
+            return Ok(Some(row.get(0)?));
+        }
+
+        // 2. Suffix match (e.g. matching +491729925904 with 01729925904)
+        let pure_digits: String = normalized.chars().filter(|c| c.is_ascii_digit()).collect();
+        if pure_digits.len() >= 6 {
+            let suffix = if pure_digits.len() > 7 {
+                &pure_digits[pure_digits.len() - 7..]
+            } else {
+                &pure_digits
+            };
+            let mut suffix_stmt = conn.prepare(
+                r#"
+                SELECT c.display_name
+                FROM contacts c
+                JOIN contact_numbers n ON c.id = n.contact_id
+                WHERE n.normalized_digits LIKE '%' || ?1
+                LIMIT 1
+                "#,
+            )?;
+            let mut srows = suffix_stmt.query(params![suffix])?;
+            if let Some(row) = srows.next()? {
+                return Ok(Some(row.get(0)?));
+            }
+        }
+
+        Ok(None)
+    }
+
+    pub fn delete_contact(&self, id: ContactId) -> Result<(), StorageError> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "DELETE FROM contact_numbers WHERE contact_id = ?1",
+            params![id.to_string()],
+        )?;
+        conn.execute(
+            "DELETE FROM contacts WHERE id = ?1",
+            params![id.to_string()],
+        )?;
+        Ok(())
+    }
+
+    pub fn clear_fritzbox_contacts(&self) -> Result<(), StorageError> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "DELETE FROM contact_numbers WHERE contact_id IN (SELECT id FROM contacts WHERE source = 'fritzbox')",
+            [],
+        )?;
+        conn.execute("DELETE FROM contacts WHERE source = 'fritzbox'", [])?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -612,7 +887,9 @@ mod tests {
         let mut custom_cfg = default_cfg;
         custom_cfg.input_device_id = Some("Jabra Evolve2 30 SE, USB Audio".into());
         custom_cfg.output_device_id = Some("Jabra Evolve2 30 SE, USB Audio".into());
-        storage.save_audio_config(&custom_cfg).expect("save audio config");
+        storage
+            .save_audio_config(&custom_cfg)
+            .expect("save audio config");
 
         let loaded = storage.get_audio_config().expect("load audio config");
         assert_eq!(
@@ -628,7 +905,10 @@ mod tests {
     #[test]
     fn test_account_credentials_persistence() {
         let storage = StorageManager::new_in_memory().expect("in-memory db");
-        assert!(storage.is_isolated_backend(), "Test must use isolated in-memory credential backend");
+        assert!(
+            storage.is_isolated_backend(),
+            "Test must use isolated in-memory credential backend"
+        );
         let id = AccountId::new();
 
         assert_eq!(storage.get_account_secret(id).expect("get empty"), None);
@@ -642,7 +922,12 @@ mod tests {
         );
 
         storage.delete_account_secret(id).expect("delete secret");
-        assert_eq!(storage.get_account_secret(id).expect("get empty after delete"), None);
+        assert_eq!(
+            storage
+                .get_account_secret(id)
+                .expect("get empty after delete"),
+            None
+        );
     }
 
     #[test]
@@ -673,5 +958,110 @@ mod tests {
             res.is_err(),
             "KeyringCredentialBackend must refuse host keyring operations during tests"
         );
+    }
+
+    #[test]
+    fn test_contacts_persistence_search_and_lookup() {
+        let storage = StorageManager::new_in_memory().expect("in-memory db");
+
+        let mut c1 = Contact::new(
+            "Alice Schmidt",
+            ContactSource::FritzBox,
+            Some("fb_001".into()),
+        );
+        c1.add_number(ContactNumber::new(
+            "030 1234567",
+            NumberType::Home,
+            Some("**611".into()),
+            None,
+        ));
+        c1.add_number(ContactNumber::new(
+            "+49 172 9925904",
+            NumberType::Mobile,
+            None,
+            None,
+        ));
+
+        let mut c2 = Contact::new("Bob Builder", ContactSource::Local, None);
+        c2.add_number(ContactNumber::new(
+            "0170 5551234",
+            NumberType::Mobile,
+            None,
+            None,
+        ));
+
+        let mut c3 = Contact::new(
+            "FRITZ!Box Service",
+            ContactSource::FritzBox,
+            Some("fb_002".into()),
+        );
+        c3.add_number(ContactNumber::new(
+            "**9",
+            NumberType::Internal,
+            Some("**9".into()),
+            None,
+        ));
+
+        storage
+            .upsert_contacts(&[c1.clone(), c2.clone(), c3.clone()])
+            .expect("upsert");
+
+        // 1. List contacts
+        let contacts = storage.list_contacts().expect("list");
+        assert_eq!(contacts.len(), 3);
+        assert_eq!(contacts[0].display_name, "Alice Schmidt");
+        assert_eq!(contacts[0].numbers.len(), 2);
+        assert_eq!(contacts[1].display_name, "Bob Builder");
+        assert_eq!(contacts[2].display_name, "FRITZ!Box Service");
+
+        // 2. Caller ID Resolution
+        // Match exact normalized
+        assert_eq!(
+            storage
+                .resolve_caller_name("+491729925904")
+                .expect("resolve"),
+            Some("Alice Schmidt".into())
+        );
+        // Match national format without country code against international
+        assert_eq!(
+            storage.resolve_caller_name("01729925904").expect("resolve"),
+            Some("Alice Schmidt".into())
+        );
+        // Match internal quickdial
+        assert_eq!(
+            storage.resolve_caller_name("**611").expect("resolve"),
+            Some("Alice Schmidt".into())
+        );
+        assert_eq!(
+            storage.resolve_caller_name("**9").expect("resolve"),
+            Some("FRITZ!Box Service".into())
+        );
+        // Non-existent
+        assert_eq!(
+            storage.resolve_caller_name("0999999").expect("resolve"),
+            None
+        );
+
+        // 3. Search Contacts
+        // Name query
+        let res_name = storage.search_contacts("alice").expect("search name");
+        assert_eq!(res_name.len(), 1);
+        assert_eq!(res_name[0].display_name, "Alice Schmidt");
+
+        // Number query
+        let res_num = storage.search_contacts("5551234").expect("search num");
+        assert_eq!(res_num.len(), 1);
+        assert_eq!(res_num[0].display_name, "Bob Builder");
+
+        // T9 Numeric search query (e.g. "254" for "ALI...")
+        let res_t9 = storage.search_contacts("254").expect("search t9");
+        assert_eq!(res_t9.len(), 1);
+        assert_eq!(res_t9[0].display_name, "Alice Schmidt");
+
+        // 4. Clear FRITZ!Box contacts
+        storage.clear_fritzbox_contacts().expect("clear fb");
+        let remaining = storage.list_contacts().expect("list remaining");
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].display_name, "Bob Builder");
     }
 }

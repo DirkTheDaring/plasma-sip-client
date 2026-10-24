@@ -14,12 +14,12 @@ use bytes::Bytes;
 use cpal::traits::DeviceTrait;
 use sip_audio::g711::linear_to_alaw;
 use sip_audio::resampler::{InputResampler, OutputResampler};
-use sip_audio::{find_input_device, find_output_device, AudioBackendMode, AudioEngine};
+use sip_audio::{AudioBackendMode, AudioEngine, find_input_device, find_output_device};
 use sip_domain::{AccountId, CallState, SipAccount, TransportProtocol};
 use sip_engine::client::SipClient;
 use sip_media::rtp::RtpPacket;
 use sip_protocol::{
-    generate_tag, SdpSession, SipMessage, SipMethod, SipResponse, TransactionManager,
+    SdpSession, SipMessage, SipMethod, SipResponse, TransactionManager, generate_tag,
 };
 use sip_service::CallManager;
 use sip_storage::StorageManager;
@@ -37,7 +37,10 @@ async fn setup_test_service() -> (
     tokio::task::JoinHandle<()>,
 ) {
     let storage = Arc::new(StorageManager::new_in_memory().expect("in-memory db"));
-    assert!(storage.is_isolated_backend(), "Must use isolated credential backend");
+    assert!(
+        storage.is_isolated_backend(),
+        "Must use isolated credential backend"
+    );
     let transport = Arc::new(
         SipUdpTransport::bind("127.0.0.1:0")
             .await
@@ -76,7 +79,9 @@ fn seed_account(storage: &StorageManager, id: AccountId, registrar_port: u16) ->
         is_default: true,
     };
     storage.save_account(&account).expect("save account");
-    storage.save_account_secret(id, "secret_password").expect("save secret");
+    storage
+        .save_account_secret(id, "secret_password")
+        .expect("save secret");
     account
 }
 

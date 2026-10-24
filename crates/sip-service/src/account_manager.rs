@@ -132,7 +132,12 @@ impl AccountManager {
                 };
 
                 // Resolve DNS
-                let registrar_addr = match sip_transport::resolve_sip_target(&account.registrar, account.registrar_port).await {
+                let registrar_addr = match sip_transport::resolve_sip_target(
+                    &account.registrar,
+                    account.registrar_port,
+                )
+                .await
+                {
                     Ok(addrs) => match transport.select_compatible_addr(addrs) {
                         Some(addr) => addr,
                         None => {
@@ -235,7 +240,9 @@ impl AccountManager {
                     Err(e) => {
                         warn!(account_id = %id, "Background retry registration failed; will retry again");
                         let mut st = reg_mgr.get_state().await;
-                        if st == RegistrationState::Unregistered || st == RegistrationState::Registering {
+                        if st == RegistrationState::Unregistered
+                            || st == RegistrationState::Registering
+                        {
                             st = RegistrationState::Failed {
                                 reason: e.clone(),
                                 retry_in_secs: Some(delay as u32),
@@ -310,7 +317,8 @@ impl AccountManager {
                 Ok(addrs) => match self.transport.select_compatible_addr(addrs) {
                     Some(addr) => addr,
                     None => {
-                        let err = "DNS lookup for registrar returned no compatible addresses".to_string();
+                        let err =
+                            "DNS lookup for registrar returned no compatible addresses".to_string();
                         self.set_registration_state(
                             id,
                             RegistrationState::Failed {

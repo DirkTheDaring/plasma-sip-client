@@ -3,7 +3,7 @@
 
 use sip_domain::{AudioCodec, CallState, DisconnectReason};
 use sip_engine::incoming::IncomingCallSession;
-use sip_protocol::{generate_branch, generate_tag, SdpSession, SipRequest};
+use sip_protocol::{SdpSession, SipRequest, generate_branch, generate_tag};
 use sip_transport::SipUdpTransport;
 use std::collections::HashMap;
 use std::net::SocketAddr;

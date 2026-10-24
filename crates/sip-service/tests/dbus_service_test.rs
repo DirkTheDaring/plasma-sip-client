@@ -72,7 +72,15 @@ impl MockSipRegistrar {
                     } else {
                         let resp = format!(
                             "SIP/2.0 200 OK\r\nVia: {}\r\nFrom: {}\r\nTo: {};tag=reg-srv\r\nCall-ID: {}\r\nCSeq: {}\r\nContact: <sip:620@{}:{}>;expires={}\r\nExpires: {}\r\nContent-Length: 0\r\n\r\n",
-                            via, from, to, call_id, cseq, client_addr.ip(), client_addr.port(), expires_val, expires_val
+                            via,
+                            from,
+                            to,
+                            call_id,
+                            cseq,
+                            client_addr.ip(),
+                            client_addr.port(),
+                            expires_val,
+                            expires_val
                         );
                         let _ = socket.send_to(resp.as_bytes(), client_addr).await;
                     }
@@ -94,7 +102,14 @@ impl MockSipRegistrar {
                     let sdp_body = "v=0\r\no=mock 1 1 IN IP4 127.0.0.1\r\ns=Session\r\nc=IN IP4 127.0.0.1\r\nt=0 0\r\nm=audio 40000 RTP/AVP 8\r\na=rtpmap:8 PCMA/8000\r\n";
                     let ok = format!(
                         "SIP/2.0 200 OK\r\nVia: {}\r\nFrom: {}\r\nTo: {};tag=mock-uas-tag\r\nCall-ID: {}\r\nCSeq: {}\r\nContact: <sip:611@127.0.0.1:{}>\r\nContent-Type: application/sdp\r\nContent-Length: {}\r\n\r\n{}",
-                        via, from, to, call_id, cseq, local_addr.port(), sdp_body.len(), sdp_body
+                        via,
+                        from,
+                        to,
+                        call_id,
+                        cseq,
+                        local_addr.port(),
+                        sdp_body.len(),
+                        sdp_body
                     );
                     let _ = socket.send_to(ok.as_bytes(), client_addr).await;
                 } else if msg.method == sip_protocol::SipMethod::Bye {
@@ -131,7 +146,10 @@ async fn test_dbus_service_api_contract() {
 
     // 1. Setup in-memory SQLite storage and managers
     let storage = Arc::new(StorageManager::new_in_memory().expect("in-memory db"));
-    assert!(storage.is_isolated_backend(), "Must use isolated credential backend");
+    assert!(
+        storage.is_isolated_backend(),
+        "Must use isolated credential backend"
+    );
     let account_manager = Arc::new(AccountManager::new(
         storage.clone(),
         transport.clone(),
@@ -720,5 +738,102 @@ async fn test_dbus_service_api_contract() {
         .deserialize()
         .expect("deserialize updated mode");
     assert_eq!(updated_mode, "answer_and_drop");
-}
 
+    // -------------------------------------------------------------------------
+    // Contacts & Phonebook D-Bus API Verification
+    // -------------------------------------------------------------------------
+    let initial_contacts: String = client_conn
+        .call_method(
+            Some(test_name.as_str()),
+            test_path.as_str(),
+            Some("org.kde.PlasmaSip"),
+            "ListContacts",
+            &(),
+        )
+        .await
+        .expect("list contacts")
+        .body()
+        .deserialize()
+        .expect("deserialize contacts");
+    assert_eq!(initial_contacts, "[]");
+
+    // Insert a contact into storage
+    let mut contact = sip_domain::Contact::new(
+        "Alice Schmidt",
+        sip_domain::ContactSource::FritzBox,
+        Some("fb_101".into()),
+    );
+    contact.add_number(sip_domain::ContactNumber::new(
+        "+49 172 9925904",
+        sip_domain::NumberType::Mobile,
+        Some("**611".into()),
+        None,
+    ));
+    storage
+        .save_contact(&contact)
+        .expect("save contact to storage");
+
+    // List contacts again
+    let contacts_after: String = client_conn
+        .call_method(
+            Some(test_name.as_str()),
+            test_path.as_str(),
+            Some("org.kde.PlasmaSip"),
+            "ListContacts",
+            &(),
+        )
+        .await
+        .expect("list contacts after")
+        .body()
+        .deserialize()
+        .expect("deserialize");
+    assert!(contacts_after.contains("Alice Schmidt"));
+
+    // Search contacts via D-Bus
+    let search_res: String = client_conn
+        .call_method(
+            Some(test_name.as_str()),
+            test_path.as_str(),
+            Some("org.kde.PlasmaSip"),
+            "SearchContacts",
+            &("alice"),
+        )
+        .await
+        .expect("search contacts")
+        .body()
+        .deserialize()
+        .expect("deserialize search");
+    assert!(search_res.contains("Alice Schmidt"));
+
+    // Resolve caller name via D-Bus
+    let resolved_name: String = client_conn
+        .call_method(
+            Some(test_name.as_str()),
+            test_path.as_str(),
+            Some("org.kde.PlasmaSip"),
+            "ResolveCallerName",
+            &("01729925904"),
+        )
+        .await
+        .expect("resolve caller name")
+        .body()
+        .deserialize()
+        .expect("deserialize name");
+    assert_eq!(resolved_name, "Alice Schmidt");
+
+    // Sync phonebook without a configured FRITZ!Box returns structured JSON error
+    let sync_res: String = client_conn
+        .call_method(
+            Some(test_name.as_str()),
+            test_path.as_str(),
+            Some("org.kde.PlasmaSip"),
+            "SyncPhonebook",
+            &(),
+        )
+        .await
+        .expect("sync phonebook")
+        .body()
+        .deserialize()
+        .expect("deserialize sync");
+    assert!(sync_res.contains("\"success\":false"));
+}

@@ -1,6 +1,6 @@
 use sip_domain::{AudioCodec, CallState, DisconnectReason};
 use sip_engine::incoming::IncomingCallSession;
-use sip_protocol::{generate_branch, generate_tag, SdpSession, SipMessage, SipMethod, SipRequest};
+use sip_protocol::{SdpSession, SipMessage, SipMethod, SipRequest, generate_branch, generate_tag};
 use sip_transport::SipUdpTransport;
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -94,7 +94,10 @@ async fn test_incoming_call_answered_and_hangup() {
     if let SipMessage::Response(res) = msg2 {
         assert_eq!(res.status_code, 180);
         assert!(res.headers.get("To").unwrap().contains(";tag="));
-        assert!(res.headers.contains_key("Contact"), "RFC 3261 early dialog 180 Ringing MUST have Contact");
+        assert!(
+            res.headers.contains_key("Contact"),
+            "RFC 3261 early dialog 180 Ringing MUST have Contact"
+        );
     } else {
         panic!("Expected 180 Ringing");
     }

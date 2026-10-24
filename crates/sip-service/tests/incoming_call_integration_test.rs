@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::UdpSocket;
 
-use sip_audio::{linear_to_alaw, AudioBackendMode, AudioEngine};
+use sip_audio::{AudioBackendMode, AudioEngine, linear_to_alaw};
 use sip_domain::{
     AccountId, CallDirection, CallRejectMode, CallState, DisconnectReason, SipAccount,
     TransportProtocol,
@@ -29,8 +29,8 @@ use sip_engine::SipClient;
 use sip_media::rtp::RtpPacket;
 use sip_platform::{NotificationAction, PlatformNotifier};
 use sip_protocol::{
-    generate_branch, generate_tag, SdpSession, SipMessage, SipMethod, SipRequest,
-    TransactionManager,
+    SdpSession, SipMessage, SipMethod, SipRequest, TransactionManager, generate_branch,
+    generate_tag,
 };
 use sip_service::CallManager;
 use sip_storage::StorageManager;
@@ -46,7 +46,10 @@ async fn setup_daemon_environment() -> (
     tokio::task::JoinHandle<()>,
 ) {
     let storage = Arc::new(StorageManager::new_in_memory().expect("in-memory db"));
-    assert!(storage.is_isolated_backend(), "Must use isolated credential backend");
+    assert!(
+        storage.is_isolated_backend(),
+        "Must use isolated credential backend"
+    );
     let transport = Arc::new(
         SipUdpTransport::bind("127.0.0.1:0")
             .await
@@ -86,7 +89,9 @@ async fn setup_daemon_environment() -> (
         is_default: true,
     };
     storage.save_account(&account).expect("save account");
-    storage.save_account_secret(account_id, "daemon-secret").expect("save secret");
+    storage
+        .save_account_secret(account_id, "daemon-secret")
+        .expect("save secret");
 
     (call_manager, storage, transport, account_id, recv_loop)
 }
@@ -1364,8 +1369,13 @@ async fn test_r4_incoming_call_configurable_reject_modes() {
     let client_addr = client_transport.local_addr();
 
     // 1. Test 486 Busy Here reject mode
-    storage.save_reject_mode(CallRejectMode::BusyHere486).unwrap();
-    assert_eq!(storage.get_reject_mode().unwrap(), CallRejectMode::BusyHere486);
+    storage
+        .save_reject_mode(CallRejectMode::BusyHere486)
+        .unwrap();
+    assert_eq!(
+        storage.get_reject_mode().unwrap(),
+        CallRejectMode::BusyHere486
+    );
 
     let caller_socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
     let caller_addr = caller_socket.local_addr().unwrap();
@@ -1377,8 +1387,14 @@ async fn test_r4_incoming_call_configurable_reject_modes() {
     let sip_call_id = format!("call-reject-486-{}@127.0.0.1", generate_tag());
 
     let mut headers = std::collections::HashMap::new();
-    headers.insert("Via".into(), format!("SIP/2.0/UDP {};branch={}", caller_addr, branch));
-    headers.insert("From".into(), format!("\"Caller\" <sip:caller@fritz.box>;tag={}", from_tag));
+    headers.insert(
+        "Via".into(),
+        format!("SIP/2.0/UDP {};branch={}", caller_addr, branch),
+    );
+    headers.insert(
+        "From".into(),
+        format!("\"Caller\" <sip:caller@fritz.box>;tag={}", from_tag),
+    );
     headers.insert("To".into(), "<sip:620@127.0.0.1>".into());
     headers.insert("Call-ID".into(), sip_call_id.clone());
     headers.insert("CSeq".into(), "1 INVITE".into());
@@ -1393,7 +1409,10 @@ async fn test_r4_incoming_call_configurable_reject_modes() {
         body: sdp_offer.serialize(),
     };
 
-    caller_socket.send_to(invite.serialize().as_bytes(), client_addr).await.unwrap();
+    caller_socket
+        .send_to(invite.serialize().as_bytes(), client_addr)
+        .await
+        .unwrap();
     let (call_id, _) = incoming_rx.recv().await.unwrap();
 
     // Drain provisional responses
@@ -1406,7 +1425,12 @@ async fn test_r4_incoming_call_configurable_reject_modes() {
 
     let mut received_486 = false;
     for _ in 0..2 {
-        if let Ok(Ok((len, _))) = tokio::time::timeout(Duration::from_millis(400), caller_socket.recv_from(&mut buf)).await {
+        if let Ok(Ok((len, _))) = tokio::time::timeout(
+            Duration::from_millis(400),
+            caller_socket.recv_from(&mut buf),
+        )
+        .await
+        {
             let text = std::str::from_utf8(&buf[..len]).unwrap();
             if let Ok(SipMessage::Response(res)) = SipMessage::parse(text) {
                 if res.status_code == 486 {
@@ -1420,11 +1444,19 @@ async fn test_r4_incoming_call_configurable_reject_modes() {
     assert!(received_486, "Caller should have received 486 Busy Here");
 
     // 2. Test 600 Busy Everywhere reject mode
-    storage.save_reject_mode(CallRejectMode::BusyEverywhere600).unwrap();
+    storage
+        .save_reject_mode(CallRejectMode::BusyEverywhere600)
+        .unwrap();
     let sip_call_id2 = format!("call-reject-600-{}@127.0.0.1", generate_tag());
     let mut headers2 = std::collections::HashMap::new();
-    headers2.insert("Via".into(), format!("SIP/2.0/UDP {};branch={}", caller_addr, generate_branch()));
-    headers2.insert("From".into(), format!("\"Caller\" <sip:caller@fritz.box>;tag={}", generate_tag()));
+    headers2.insert(
+        "Via".into(),
+        format!("SIP/2.0/UDP {};branch={}", caller_addr, generate_branch()),
+    );
+    headers2.insert(
+        "From".into(),
+        format!("\"Caller\" <sip:caller@fritz.box>;tag={}", generate_tag()),
+    );
     headers2.insert("To".into(), "<sip:620@127.0.0.1>".into());
     headers2.insert("Call-ID".into(), sip_call_id2.clone());
     headers2.insert("CSeq".into(), "1 INVITE".into());
@@ -1439,7 +1471,10 @@ async fn test_r4_incoming_call_configurable_reject_modes() {
         body: sdp_offer.serialize(),
     };
 
-    caller_socket.send_to(invite2.serialize().as_bytes(), client_addr).await.unwrap();
+    caller_socket
+        .send_to(invite2.serialize().as_bytes(), client_addr)
+        .await
+        .unwrap();
     let (call_id2, _) = incoming_rx.recv().await.unwrap();
     let _ = caller_socket.recv_from(&mut buf).await.unwrap();
     let _ = caller_socket.recv_from(&mut buf).await.unwrap();
@@ -1448,7 +1483,12 @@ async fn test_r4_incoming_call_configurable_reject_modes() {
 
     let mut received_600 = false;
     for _ in 0..2 {
-        if let Ok(Ok((len, _))) = tokio::time::timeout(Duration::from_millis(400), caller_socket.recv_from(&mut buf)).await {
+        if let Ok(Ok((len, _))) = tokio::time::timeout(
+            Duration::from_millis(400),
+            caller_socket.recv_from(&mut buf),
+        )
+        .await
+        {
             let text = std::str::from_utf8(&buf[..len]).unwrap();
             if let Ok(SipMessage::Response(res)) = SipMessage::parse(text) {
                 if res.status_code == 600 {
@@ -1459,14 +1499,25 @@ async fn test_r4_incoming_call_configurable_reject_modes() {
             }
         }
     }
-    assert!(received_600, "Caller should have received 600 Busy Everywhere");
+    assert!(
+        received_600,
+        "Caller should have received 600 Busy Everywhere"
+    );
 
     // 3. Test Answer & Drop reject mode
-    storage.save_reject_mode(CallRejectMode::AnswerAndDrop).unwrap();
+    storage
+        .save_reject_mode(CallRejectMode::AnswerAndDrop)
+        .unwrap();
     let sip_call_id3 = format!("call-reject-drop-{}@127.0.0.1", generate_tag());
     let mut headers3 = std::collections::HashMap::new();
-    headers3.insert("Via".into(), format!("SIP/2.0/UDP {};branch={}", caller_addr, generate_branch()));
-    headers3.insert("From".into(), format!("\"Caller\" <sip:caller@fritz.box>;tag={}", generate_tag()));
+    headers3.insert(
+        "Via".into(),
+        format!("SIP/2.0/UDP {};branch={}", caller_addr, generate_branch()),
+    );
+    headers3.insert(
+        "From".into(),
+        format!("\"Caller\" <sip:caller@fritz.box>;tag={}", generate_tag()),
+    );
     headers3.insert("To".into(), "<sip:620@127.0.0.1>".into());
     headers3.insert("Call-ID".into(), sip_call_id3.clone());
     headers3.insert("CSeq".into(), "1 INVITE".into());
@@ -1481,7 +1532,10 @@ async fn test_r4_incoming_call_configurable_reject_modes() {
         body: sdp_offer.serialize(),
     };
 
-    caller_socket.send_to(invite3.serialize().as_bytes(), client_addr).await.unwrap();
+    caller_socket
+        .send_to(invite3.serialize().as_bytes(), client_addr)
+        .await
+        .unwrap();
     let (call_id3, _) = incoming_rx.recv().await.unwrap();
     let _ = caller_socket.recv_from(&mut buf).await.unwrap();
     let _ = caller_socket.recv_from(&mut buf).await.unwrap();
@@ -1490,7 +1544,12 @@ async fn test_r4_incoming_call_configurable_reject_modes() {
 
     let mut received_200 = false;
     for _ in 0..2 {
-        if let Ok(Ok((len, _))) = tokio::time::timeout(Duration::from_millis(400), caller_socket.recv_from(&mut buf)).await {
+        if let Ok(Ok((len, _))) = tokio::time::timeout(
+            Duration::from_millis(400),
+            caller_socket.recv_from(&mut buf),
+        )
+        .await
+        {
             let text = std::str::from_utf8(&buf[..len]).unwrap();
             if let Ok(SipMessage::Response(res)) = SipMessage::parse(text) {
                 if res.status_code == 200 {
@@ -1500,12 +1559,20 @@ async fn test_r4_incoming_call_configurable_reject_modes() {
             }
         }
     }
-    assert!(received_200, "Caller should have received 200 OK from Answer & Drop");
+    assert!(
+        received_200,
+        "Caller should have received 200 OK from Answer & Drop"
+    );
 
     // Receive the immediate BYE
     let mut received_bye = false;
     for _ in 0..2 {
-        if let Ok(Ok((len, _))) = tokio::time::timeout(Duration::from_millis(400), caller_socket.recv_from(&mut buf)).await {
+        if let Ok(Ok((len, _))) = tokio::time::timeout(
+            Duration::from_millis(400),
+            caller_socket.recv_from(&mut buf),
+        )
+        .await
+        {
             let text = std::str::from_utf8(&buf[..len]).unwrap();
             if let Ok(SipMessage::Request(req)) = SipMessage::parse(text) {
                 if req.method == SipMethod::Bye {
@@ -1515,6 +1582,8 @@ async fn test_r4_incoming_call_configurable_reject_modes() {
             }
         }
     }
-    assert!(received_bye, "Caller should have received immediate BYE from Answer & Drop");
+    assert!(
+        received_bye,
+        "Caller should have received immediate BYE from Answer & Drop"
+    );
 }
-

@@ -14,22 +14,14 @@ pub fn linear_to_alaw(mut pcm: i16) -> u8 {
 
     let exponent = if pcm >= 2048 {
         if pcm >= 8192 {
-            if pcm >= 16384 {
-                7
-            } else {
-                6
-            }
+            if pcm >= 16384 { 7 } else { 6 }
         } else if pcm >= 4096 {
             5
         } else {
             4
         }
     } else if pcm >= 512 {
-        if pcm >= 1024 {
-            3
-        } else {
-            2
-        }
+        if pcm >= 1024 { 3 } else { 2 }
     } else if pcm >= 256 {
         1
     } else {

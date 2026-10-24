@@ -2,9 +2,9 @@
 
 use chrono::Utc;
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tokio::sync::{broadcast, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
+use tokio::sync::{Mutex, broadcast};
 use tracing::{debug, info, warn};
 
 use sip_audio::AudioEngine;
@@ -14,7 +14,7 @@ use sip_domain::{
 use sip_engine::{CallEvent, IncomingCallSession, IncomingRequestHandler, OutgoingCallSession};
 use sip_media::stats::MediaStats;
 use sip_platform::PlatformNotifier;
-use sip_protocol::{generate_tag, SipMethod, SipRequest, SipResponse, TransactionManager};
+use sip_protocol::{SipMethod, SipRequest, SipResponse, TransactionManager, generate_tag};
 use sip_providers::{FritzBoxProvider, GenericSipProvider, SipProviderProfile};
 use sip_storage::{CallLogEntry, StorageManager};
 use sip_transport::SipUdpTransport;
@@ -148,10 +148,10 @@ impl CallManager {
         if let Some(ref sess) = *session_guard {
             match sess {
                 ActiveSession::Outgoing(s) if s.call_id == call_id => {
-                    return s.get_media_stats().await
+                    return s.get_media_stats().await;
                 }
                 ActiveSession::Incoming(s) if s.call_id == call_id => {
-                    return s.get_media_stats().await
+                    return s.get_media_stats().await;
                 }
                 _ => {}
             }
@@ -164,10 +164,10 @@ impl CallManager {
         if let Some(ref sess) = *session_guard {
             match sess {
                 ActiveSession::Outgoing(s) if s.call_id == call_id => {
-                    return s.send_dtmf(digit).await
+                    return s.send_dtmf(digit).await;
                 }
                 ActiveSession::Incoming(s) if s.call_id == call_id => {
-                    return s.send_dtmf(digit).await
+                    return s.send_dtmf(digit).await;
                 }
                 _ => {}
             }
@@ -207,13 +207,13 @@ impl CallManager {
                 return Err(format!(
                     "No credentials found in Secret Service for account {}",
                     account_id
-                ))
+                ));
             }
             Err(e) => {
                 return Err(format!(
                     "Failed to retrieve credentials from Secret Service: {}",
                     e
-                ))
+                ));
             }
         };
 
@@ -236,14 +236,14 @@ impl CallManager {
                         return Err(format!(
                             "DNS lookup for {}:{} returned no compatible addresses",
                             account.registrar, account.registrar_port
-                        ))
+                        ));
                     }
                 },
                 Err(e) => {
                     return Err(format!(
                         "DNS resolution failed for {}:{}: {}",
                         account.registrar, account.registrar_port, e
-                    ))
+                    ));
                 }
             };
 
@@ -323,7 +323,9 @@ impl CallManager {
                                             call.connected_at = Some(started_at);
 
                                             // Connect real-time audio pipeline
-                                            let audio_cfg = storage_clone.get_audio_config().unwrap_or_default();
+                                            let audio_cfg = storage_clone
+                                                .get_audio_config()
+                                                .unwrap_or_default();
                                             let in_dev = audio_cfg.input_device_id.as_deref();
                                             let out_dev = audio_cfg.output_device_id.as_deref();
 
@@ -680,7 +682,9 @@ impl CallManager {
         }
 
         if !is_trusted_origin {
-            warn!("Rejecting incoming INVITE from untrusted origin (not matching any enabled account registrar)");
+            warn!(
+                "Rejecting incoming INVITE from untrusted origin (not matching any enabled account registrar)"
+            );
             let to_tag = generate_tag();
             let reject_res =
                 SipResponse::create_for_request(&req, 403, "Forbidden", Some(&to_tag), None, None);
@@ -869,7 +873,8 @@ impl CallManager {
                                         call.connected_at = Some(started_at);
 
                                         // Connect real-time audio pipeline
-                                        let audio_cfg = storage_clone.get_audio_config().unwrap_or_default();
+                                        let audio_cfg =
+                                            storage_clone.get_audio_config().unwrap_or_default();
                                         let in_dev = audio_cfg.input_device_id.as_deref();
                                         let out_dev = audio_cfg.output_device_id.as_deref();
 

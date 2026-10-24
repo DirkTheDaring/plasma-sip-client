@@ -125,7 +125,10 @@ async fn setup_test_environment(
     Arc<SipUdpTransport>,
 ) {
     let storage = Arc::new(StorageManager::new_in_memory().expect("in-memory db"));
-    assert!(storage.is_isolated_backend(), "Must use isolated credential backend");
+    assert!(
+        storage.is_isolated_backend(),
+        "Must use isolated credential backend"
+    );
     let transport = Arc::new(
         SipUdpTransport::bind("127.0.0.1:0")
             .await
@@ -160,7 +163,9 @@ async fn setup_test_environment(
     };
 
     storage.save_account(&account).expect("save account");
-    storage.save_account_secret(account_id, "correct_password").expect("save secret");
+    storage
+        .save_account_secret(account_id, "correct_password")
+        .expect("save secret");
 
     (storage, call_manager, account_id, transport)
 }
@@ -366,7 +371,11 @@ async fn test_r2_outgoing_call_remote_hangup() {
     let from_tag = sip_protocol::extract_tag(&invite_pkt.from).unwrap();
     let bye_req = format!(
         "BYE sip:620@{}:{} SIP/2.0\r\nVia: SIP/2.0/UDP {}:5060;branch=z9hG4bK-remote-bye-1\r\nMax-Forwards: 70\r\nFrom: <sip:**611@fritz.box>;tag=remote-tag-99\r\nTo: <sip:620@fritz.box>;tag={}\r\nCall-ID: {}\r\nCSeq: 10 BYE\r\nContent-Length: 0\r\n\r\n",
-        client_addr.ip(), client_addr.port(), pbx.local_addr.ip(), from_tag, invite_pkt.call_id
+        client_addr.ip(),
+        client_addr.port(),
+        pbx.local_addr.ip(),
+        from_tag,
+        invite_pkt.call_id
     );
 
     let _ = pbx_sock.send_to(bye_req.as_bytes(), client_addr).await;

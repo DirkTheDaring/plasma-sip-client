@@ -78,7 +78,15 @@ impl MockSipRegistrar {
                         if is_valid {
                             let resp = format!(
                                 "SIP/2.0 200 OK\r\nVia: {}\r\nFrom: {}\r\nTo: {};tag=reg-srv-tag\r\nCall-ID: {}\r\nCSeq: {}\r\nContact: <sip:620@{}:{}>;expires={}\r\nExpires: {}\r\nContent-Length: 0\r\n\r\n",
-                                via, from, to, call_id, cseq, client_addr.ip(), client_addr.port(), expires_val, expires_val
+                                via,
+                                from,
+                                to,
+                                call_id,
+                                cseq,
+                                client_addr.ip(),
+                                client_addr.port(),
+                                expires_val,
+                                expires_val
                             );
                             let _ = sock_clone.send_to(resp.as_bytes(), client_addr).await;
                         } else {

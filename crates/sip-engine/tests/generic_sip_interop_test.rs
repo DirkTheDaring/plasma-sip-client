@@ -7,7 +7,7 @@ use sip_domain::{
 use sip_engine::call::OutgoingCallSession;
 use sip_engine::registration::RegistrationManager;
 use sip_protocol::{
-    generate_tag, SdpSession, SipMessage, SipMethod, SipResponse, TransactionManager,
+    SdpSession, SipMessage, SipMethod, SipResponse, TransactionManager, generate_tag,
 };
 use sip_providers::{GenericSipProvider, SipProviderProfile};
 use sip_transport::SipUdpTransport;

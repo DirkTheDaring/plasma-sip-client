@@ -650,15 +650,14 @@ impl SipPartyInfo {
         }
 
         let display_string = match &display_name {
-            Some(name) if name.eq_ignore_ascii_case("anonymous") || number_or_user.eq_ignore_ascii_case("anonymous") => {
+            Some(name)
+                if name.eq_ignore_ascii_case("anonymous")
+                    || number_or_user.eq_ignore_ascii_case("anonymous") =>
+            {
                 "Anonymous".to_string()
             }
-            Some(name) if name == &number_or_user => {
-                number_or_user.clone()
-            }
-            Some(name) if name.eq_ignore_ascii_case(&number_or_user) => {
-                name.clone()
-            }
+            Some(name) if name == &number_or_user => number_or_user.clone(),
+            Some(name) if name.eq_ignore_ascii_case(&number_or_user) => name.clone(),
             Some(name) if !name.is_empty() => {
                 format!("{} ({})", name, number_or_user)
             }
@@ -752,8 +751,10 @@ Content-Length: 0\r\n\r\n";
         assert!(
             serialized.contains("Via: SIP/2.0/UDP proxy2.example.com:5060;branch=z9hG4bK-p2\r\n")
         );
-        assert!(serialized
-            .contains("Via: SIP/2.0/UDP client.example.com:5060;branch=z9hG4bK-client\r\n"));
+        assert!(
+            serialized
+                .contains("Via: SIP/2.0/UDP client.example.com:5060;branch=z9hG4bK-client\r\n")
+        );
     }
 
     #[test]
@@ -897,7 +898,8 @@ Content-Length: 0\r\n\r\n";
         assert_eq!(p1.display_string, "01729925904");
 
         // Display name + SIP URI with tag
-        let p2 = SipPartyInfo::parse("\"Alice Smith\" <sip:01729968532@fritz.box>;tag=959B70C1").unwrap();
+        let p2 = SipPartyInfo::parse("\"Alice Smith\" <sip:01729968532@fritz.box>;tag=959B70C1")
+            .unwrap();
         assert_eq!(p2.number_or_user, "01729968532");
         assert_eq!(p2.display_name.as_deref(), Some("Alice Smith"));
         assert_eq!(p2.display_string, "Alice Smith (01729968532)");
@@ -938,9 +940,16 @@ Content-Length: 0\r\n\r\n";
     #[test]
     fn test_sip_request_caller_and_called_info() {
         let mut req = SipRequest::new(SipMethod::Invite, "sip:alice-smith@192.0.2.235:5060");
-        req.headers.insert("From".into(), "<sip:01729925904@fritz.box>;tag=FB9A3852".into());
-        req.headers.insert("To".into(), "<sip:alice-smith@192.0.2.235>".into());
-        req.headers.insert("P-Called-Party-ID".into(), "<sip:03023125000@fritz.box>".into());
+        req.headers.insert(
+            "From".into(),
+            "<sip:01729925904@fritz.box>;tag=FB9A3852".into(),
+        );
+        req.headers
+            .insert("To".into(), "<sip:alice-smith@192.0.2.235>".into());
+        req.headers.insert(
+            "P-Called-Party-ID".into(),
+            "<sip:03023125000@fritz.box>".into(),
+        );
 
         let caller = req.caller_info();
         assert_eq!(caller.number_or_user, "01729925904");

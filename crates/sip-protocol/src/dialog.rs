@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use thiserror::Error;
 
-use crate::message::{generate_branch, SipMethod, SipRequest, SipResponse};
+use crate::message::{SipMethod, SipRequest, SipResponse, generate_branch};
 
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum DialogError {

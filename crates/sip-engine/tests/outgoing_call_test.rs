@@ -74,7 +74,14 @@ impl MockSipPbx {
                                 let sdp_answer = "v=0\r\no=mockpbx 100 1 IN IP4 127.0.0.1\r\ns=MockPBX\r\nc=IN IP4 127.0.0.1\r\nt=0 0\r\nm=audio 20000 RTP/AVP 8 0 101\r\na=rtpmap:8 PCMA/8000\r\na=rtpmap:0 PCMU/8000\r\na=sendrecv\r\n";
                                 let ok_200 = format!(
                                     "SIP/2.0 200 OK\r\nVia: {}\r\nFrom: {}\r\nTo: {};tag=remote-tag-123\r\nCall-ID: {}\r\nCSeq: {}\r\nContact: <sip:bob@127.0.0.1:{}>\r\nContent-Type: application/sdp\r\nContent-Length: {}\r\n\r\n{}",
-                                    via, from, to, call_id, cseq, local_addr.port(), sdp_answer.len(), sdp_answer
+                                    via,
+                                    from,
+                                    to,
+                                    call_id,
+                                    cseq,
+                                    local_addr.port(),
+                                    sdp_answer.len(),
+                                    sdp_answer
                                 );
                                 let _ = socket.send_to(ok_200.as_bytes(), client_addr).await;
                             }

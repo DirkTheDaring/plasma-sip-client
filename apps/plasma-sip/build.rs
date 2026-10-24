@@ -6,6 +6,8 @@ fn main() {
         "qml/DialPadView.qml",
         "qml/ActiveCallView.qml",
         "qml/CallHistoryView.qml",
+        "qml/ContactsView.qml",
+        "qml/SettingsView.qml",
         "qml/AudioSettingsView.qml",
         "qml/AccountWizardView.qml",
         "qml/IncomingCallBanner.qml",

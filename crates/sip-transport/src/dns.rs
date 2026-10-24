@@ -333,7 +333,7 @@ mod tests {
         resp.extend_from_slice(&33u16.to_be_bytes()); // TYPE SRV
         resp.extend_from_slice(&1u16.to_be_bytes()); // CLASS IN
         resp.extend_from_slice(&300u32.to_be_bytes()); // TTL
-                                                       // RDLENGTH = 2 (priority) + 2 (weight) + 2 (port) + target length
+        // RDLENGTH = 2 (priority) + 2 (weight) + 2 (port) + target length
         let mut rdata1 = Vec::new();
         rdata1.extend_from_slice(&20u16.to_be_bytes()); // Priority 20
         rdata1.extend_from_slice(&0u16.to_be_bytes()); // Weight 0

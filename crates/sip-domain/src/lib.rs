@@ -3,12 +3,14 @@
 pub mod account;
 pub mod audio;
 pub mod call;
+pub mod contact;
 pub mod error;
 pub mod provider;
 
 pub use account::*;
 pub use audio::*;
 pub use call::*;
+pub use contact::*;
 pub use error::*;
 pub use provider::*;
 
@@ -79,10 +81,12 @@ mod tests {
         assert!(matches!(terminated, CallState::Terminated { .. }));
 
         // Invalid transitions
-        assert!(state
-            .transition_to(CallState::Active {
-                started_at: Utc::now(),
-            })
-            .is_err());
+        assert!(
+            state
+                .transition_to(CallState::Active {
+                    started_at: Utc::now(),
+                })
+                .is_err()
+        );
     }
 }

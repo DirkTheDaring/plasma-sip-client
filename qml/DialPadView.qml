@@ -34,6 +34,51 @@ Kirigami.Page {
         return raw;
     }
 
+    readonly property var allContacts: {
+        if (!page.bridge || !page.bridge.contacts_json) return [];
+        try {
+            var raw = page.bridge.contacts_json;
+            if (!raw || raw === "" || raw === "[]") return [];
+            return JSON.parse(raw);
+        } catch (e) {
+            return [];
+        }
+    }
+
+    readonly property var matchedContacts: {
+        var query = dialInput.text.trim();
+        if (query.length === 0 || allContacts.length === 0) return [];
+        var cleanQ = query.replace(/[^\d+*#]/g, "").toLowerCase();
+        var results = [];
+        for (var i = 0; i < allContacts.length && results.length < 3; i++) {
+            var c = allContacts[i];
+            var matchedNum = null;
+            if (c.numbers) {
+                for (var j = 0; j < c.numbers.length; j++) {
+                    var n = c.numbers[j].number.replace(/[^\d+*#]/g, "");
+                    if (n.indexOf(cleanQ) !== -1 || (cleanQ.length >= 2 && n.endsWith(cleanQ))) {
+                        matchedNum = c.numbers[j].number;
+                        break;
+                    }
+                }
+            }
+            if (matchedNum || (c.quickdial && ("**" + c.quickdial === query || c.quickdial === query))) {
+                results.push({
+                    name: c.name,
+                    number: matchedNum || (c.numbers && c.numbers.length > 0 ? c.numbers[0].number : query),
+                    quickdial: c.quickdial
+                });
+            } else if (c.name && c.name.toLowerCase().indexOf(query.toLowerCase()) !== -1) {
+                results.push({
+                    name: c.name,
+                    number: c.numbers && c.numbers.length > 0 ? c.numbers[0].number : query,
+                    quickdial: c.quickdial
+                });
+            }
+        }
+        return results;
+    }
+
     signal startCallRequested(string target)
     signal openAccountsRequested()
 
@@ -295,18 +340,80 @@ Kirigami.Page {
         Item { Layout.preferredHeight: 4 }
 
         // ---------------------------------------------------------------------
-        // 3. Quick Extension Pills (Contextual, Human-friendly chips)
+        // 3. Quick Extension & T9 Contact Matches Strip
         // ---------------------------------------------------------------------
         RowLayout {
             Layout.alignment: Qt.AlignHCenter
             spacing: Kirigami.Units.smallSpacing
 
+            // Case A: Show matched contacts when dialInput has text and matches found
             Repeater {
-                model: [
+                model: page.matchedContacts
+
+                Rectangle {
+                    implicitHeight: 28
+                    implicitWidth: matchChipRow.implicitWidth + 18
+                    radius: 14
+                    color: matchMouse.pressed ?
+                           Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.25) :
+                           (matchMouse.containsMouse ?
+                            Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.15) :
+                            Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.08))
+                    border.color: Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.3)
+                    border.width: 1
+
+                    scale: matchMouse.pressed ? 0.95 : 1.0
+                    Behavior on scale { NumberAnimation { duration: 60 } }
+
+                    MouseArea {
+                        id: matchMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            dialInput.text = modelData.number;
+                            dialInput.cursorPosition = dialInput.text.length;
+                            dialInput.forceActiveFocus();
+                        }
+                        ToolTip.text: qsTr("Call %1 (%2)").arg(modelData.name).arg(modelData.number)
+                        ToolTip.visible: containsMouse
+                    }
+
+                    RowLayout {
+                        id: matchChipRow
+                        anchors.centerIn: parent
+                        spacing: 5
+
+                        Kirigami.Icon {
+                            source: "user-identity"
+                            implicitWidth: 12
+                            implicitHeight: 12
+                            color: Kirigami.Theme.highlightColor
+                        }
+
+                        Label {
+                            text: modelData.name
+                            font.pointSize: Kirigami.Theme.smallFont.pointSize * 0.95
+                            font.weight: Font.DemiBold
+                            color: Kirigami.Theme.textColor
+                        }
+
+                        Label {
+                            text: modelData.number
+                            font.pointSize: Kirigami.Theme.smallFont.pointSize * 0.85
+                            color: Kirigami.Theme.disabledTextColor
+                        }
+                    }
+                }
+            }
+
+            // Case B: Show PBX Quick Extensions when dialInput is empty
+            Repeater {
+                model: page.matchedContacts.length === 0 ? [
                     { label: qsTr("Handset 1"), ext: "**610", icon: "phone" },
                     { label: qsTr("Handset 2"), ext: "**611", icon: "phone" },
                     { label: qsTr("All Phones"), ext: "**9", icon: "audio-volume-high" }
-                ]
+                ] : []
 
                 Rectangle {
                     implicitHeight: 28
@@ -368,14 +475,14 @@ Kirigami.Page {
         Item { Layout.fillHeight: true }
 
         // ---------------------------------------------------------------------
-        // 4. Circular Keypad Grid (State-of-the-Art Ergonomic Telephony Keys)
+        // 4. Squircle Keypad Grid (Ergonomic Breeze Telephony Keys)
         // ---------------------------------------------------------------------
         GridLayout {
             id: keypadGrid
             Layout.alignment: Qt.AlignHCenter
             columns: 3
-            rowSpacing: 14
-            columnSpacing: 22
+            rowSpacing: 12
+            columnSpacing: 18
 
             Repeater {
                 model: [
@@ -395,13 +502,13 @@ Kirigami.Page {
 
                 Item {
                     id: keyItem
-                    implicitWidth: 70
-                    implicitHeight: 70
+                    implicitWidth: 72
+                    implicitHeight: 66
 
                     Rectangle {
-                        id: keyCircle
+                        id: keySquircle
                         anchors.fill: parent
-                        radius: width / 2
+                        radius: 14
                         color: keyMouse.pressed ?
                                Qt.rgba(Kirigami.Theme.highlightColor.r, Kirigami.Theme.highlightColor.g, Kirigami.Theme.highlightColor.b, 0.22) :
                                (keyMouse.containsMouse ?
@@ -413,7 +520,7 @@ Kirigami.Page {
                         border.width: 1
 
                         // Smooth tactile press compression
-                        scale: keyMouse.pressed ? 0.91 : 1.0
+                        scale: keyMouse.pressed ? 0.93 : 1.0
                         Behavior on scale {
                             NumberAnimation { duration: 70; easing.type: Easing.OutQuad }
                         }
@@ -479,23 +586,23 @@ Kirigami.Page {
         GridLayout {
             Layout.alignment: Qt.AlignHCenter
             columns: 3
-            columnSpacing: 22
+            columnSpacing: 18
 
-            // Column 1: Left balance spacer (equal width to key: 70px)
+            // Column 1: Left balance spacer (equal width to key: 72px)
             Item {
-                implicitWidth: 70
-                implicitHeight: 74
+                implicitWidth: 72
+                implicitHeight: 68
             }
 
-            // Column 2: Center Call Button (Vibrant Breeze Emerald Floating Disc)
+            // Column 2: Center Call Button (Vibrant Breeze Emerald Squircle Disc)
             Item {
-                implicitWidth: 74
-                implicitHeight: 74
+                implicitWidth: 72
+                implicitHeight: 68
 
                 Rectangle {
                     id: callButton
                     anchors.fill: parent
-                    radius: width / 2
+                    radius: 20
 
                     readonly property bool canCall: page.bridge && page.bridge.is_registered && dialInput.text.trim().length > 0
 
@@ -510,7 +617,7 @@ Kirigami.Page {
                     border.width: canCall ? 0 : 1.5
 
                     // Soft elevation glow when active
-                    scale: callMouse.pressed ? 0.92 : 1.0
+                    scale: callMouse.pressed ? 0.93 : 1.0
                     Behavior on scale {
                         NumberAnimation { duration: 70; easing.type: Easing.OutQuad }
                     }
@@ -521,8 +628,8 @@ Kirigami.Page {
                     Kirigami.Icon {
                         anchors.centerIn: parent
                         source: "call-start"
-                        width: 32
-                        height: 32
+                        width: 30
+                        height: 30
                         color: callButton.canCall ? "white" : Kirigami.Theme.disabledTextColor
                     }
 
@@ -550,15 +657,15 @@ Kirigami.Page {
 
             // Column 3: Right Backspace Button (Aligned directly under '#' key)
             Item {
-                implicitWidth: 70
-                implicitHeight: 74
+                implicitWidth: 72
+                implicitHeight: 68
 
                 Rectangle {
                     id: backspaceBtn
                     anchors.centerIn: parent
                     width: 52
                     height: 52
-                    radius: 26
+                    radius: 14
                     color: backspaceMouse.pressed ?
                            Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.18) :
                            (backspaceMouse.containsMouse ?

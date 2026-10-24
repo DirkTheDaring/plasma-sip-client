@@ -206,7 +206,9 @@ fn test_live_dbus_operations_and_gui_lifecycle() {
     // Without an isolated test bus (e.g., dbus-run-session), this test is skipped to prevent
     // interacting with the host user's active session bus or modifying host state.
     if std::env::var_os("PLASMA_SIP_ISOLATED_TEST_BUS").is_none() {
-        eprintln!("Skipping test_live_dbus_operations_and_gui_lifecycle: safe execution requires PLASMA_SIP_ISOLATED_TEST_BUS");
+        eprintln!(
+            "Skipping test_live_dbus_operations_and_gui_lifecycle: safe execution requires PLASMA_SIP_ISOLATED_TEST_BUS"
+        );
         return;
     }
 
@@ -245,11 +247,12 @@ fn test_live_dbus_operations_and_gui_lifecycle() {
         for _ in 0..30 {
             std::thread::sleep(std::time::Duration::from_millis(100));
             let out = Command::new(&sip_bin).arg("ping").output();
-            if let Ok(o) = out {
-                if o.status.success() && String::from_utf8_lossy(&o.stdout).contains("pong") {
-                    ready = true;
-                    break;
-                }
+            if let Ok(o) = out
+                && o.status.success()
+                && String::from_utf8_lossy(&o.stdout).contains("pong")
+            {
+                ready = true;
+                break;
             }
         }
 

@@ -1,6 +1,8 @@
 //! CXX-Qt D-Bus Bridge connecting KDE Plasma 6 Kirigami QML interface
 //! to the background SIP daemon (`plasma-sipd`) over Session D-Bus (`org.kde.PlasmaSip`).
 
+#![allow(clippy::too_many_arguments, clippy::collapsible_if)]
+
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::QString;
 use futures::StreamExt;
@@ -31,7 +33,8 @@ pub trait PlasmaSipDaemon {
     fn get_audio_devices(&self) -> zbus::Result<String>;
     fn get_audio_config(&self) -> zbus::Result<String>;
     fn save_audio_config(&self, config_json: &str) -> zbus::Result<String>;
-    fn test_ringtone(&self, ringtone: &str, custom_path: &str, volume: u32) -> zbus::Result<String>;
+    fn test_ringtone(&self, ringtone: &str, custom_path: &str, volume: u32)
+    -> zbus::Result<String>;
     fn stop_test_ringtone(&self) -> zbus::Result<String>;
     fn get_account_status(&self, account_id: &str) -> zbus::Result<String>;
     fn register_account(&self, account_id: &str) -> zbus::Result<String>;
@@ -42,6 +45,10 @@ pub trait PlasmaSipDaemon {
     fn set_reject_mode(&self, mode: &str) -> zbus::Result<String>;
     fn clear_call_history(&self) -> zbus::Result<bool>;
     fn delete_call_log_entry(&self, id: &str) -> zbus::Result<bool>;
+    fn list_contacts(&self) -> zbus::Result<String>;
+    fn search_contacts(&self, query: &str) -> zbus::Result<String>;
+    fn resolve_caller_name(&self, number: &str) -> zbus::Result<String>;
+    fn sync_phonebook(&self) -> zbus::Result<String>;
 
     #[zbus(signal)]
     fn registration_changed(&self, account_id: String, state: String) -> zbus::Result<()>;
@@ -54,6 +61,9 @@ pub trait PlasmaSipDaemon {
 
     #[zbus(signal)]
     fn raise_window(&self) -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    fn contacts_changed(&self) -> zbus::Result<()>;
 }
 
 pub enum UiCommand {
@@ -97,6 +107,9 @@ pub enum UiCommand {
     DeleteAccount(String),
     ClearHistory,
     DeleteHistoryItem(String),
+    RefreshContacts,
+    SearchContacts(String),
+    SyncPhonebook,
     Reconnect,
     ReconnectAccount(String),
     Quit,
@@ -124,6 +137,9 @@ pub mod qobject {
         #[qproperty(QString, incoming_call_id)]
         #[qproperty(QString, incoming_caller)]
         #[qproperty(QString, call_history_json)]
+        #[qproperty(QString, contacts_json)]
+        #[qproperty(bool, is_syncing_contacts)]
+        #[qproperty(QString, contact_sync_status)]
         #[qproperty(QString, audio_devices_json)]
         #[qproperty(QString, audio_config_json)]
         #[qproperty(QString, status_message)]
@@ -174,6 +190,15 @@ pub mod qobject {
 
         #[qinvokable]
         fn delete_history_item(self: Pin<&mut SipUiBridge>, id: QString);
+
+        #[qinvokable]
+        fn refresh_contacts(self: Pin<&mut SipUiBridge>);
+
+        #[qinvokable]
+        fn search_contacts(self: Pin<&mut SipUiBridge>, query: QString);
+
+        #[qinvokable]
+        fn sync_phonebook(self: Pin<&mut SipUiBridge>);
 
         #[qinvokable]
         fn refresh_devices(self: Pin<&mut SipUiBridge>);
@@ -245,6 +270,9 @@ pub struct SipUiBridgeRust {
     incoming_call_id: QString,
     incoming_caller: QString,
     call_history_json: QString,
+    contacts_json: QString,
+    is_syncing_contacts: bool,
+    contact_sync_status: QString,
     audio_devices_json: QString,
     audio_config_json: QString,
     status_message: QString,
@@ -271,6 +299,9 @@ impl Default for SipUiBridgeRust {
             incoming_call_id: QString::from(""),
             incoming_caller: QString::from(""),
             call_history_json: QString::from("[]"),
+            contacts_json: QString::from("[]"),
+            is_syncing_contacts: false,
+            contact_sync_status: QString::from(""),
             audio_devices_json: QString::from("[]"),
             audio_config_json: QString::from("{}"),
             status_message: QString::from(""),
@@ -384,6 +415,14 @@ impl cxx_qt::Initialize for qobject::SipUiBridge {
                     }
                 };
 
+                let mut contacts_changed_stream = match proxy.receive_contacts_changed().await {
+                    Ok(s) => Some(s),
+                    Err(e) => {
+                        warn!(error = %e, "Failed to subscribe to contacts_changed signal");
+                        None
+                    }
+                };
+
                 loop {
                     tokio::select! {
                         Some(cmd) = cmd_rx.recv() => {
@@ -493,6 +532,36 @@ impl cxx_qt::Initialize for qobject::SipUiBridge {
                                 }
                                 UiCommand::RefreshHistory => {
                                     update_history(&proxy, &qt_thread, tray_handle.as_ref()).await;
+                                }
+                                UiCommand::RefreshContacts => {
+                                    update_contacts(&proxy, &qt_thread, "").await;
+                                }
+                                UiCommand::SearchContacts(query) => {
+                                    update_contacts(&proxy, &qt_thread, &query).await;
+                                }
+                                UiCommand::SyncPhonebook => {
+                                    info!("Requesting phonebook sync from GUI");
+                                    let _ = qt_thread.queue(|mut qobj| {
+                                        qobj.as_mut().set_is_syncing_contacts(true);
+                                        qobj.as_mut().set_contact_sync_status(QString::from("Synchronizing phonebook..."));
+                                    });
+                                    match proxy.sync_phonebook().await {
+                                        Ok(res) => {
+                                            let r_clone = res.clone();
+                                            let _ = qt_thread.queue(move |mut qobj| {
+                                                qobj.as_mut().set_is_syncing_contacts(false);
+                                                qobj.as_mut().set_contact_sync_status(QString::from(&r_clone));
+                                            });
+                                            update_contacts(&proxy, &qt_thread, "").await;
+                                        }
+                                        Err(e) => {
+                                            let err_msg = format!("Sync failed: {}", e);
+                                            let _ = qt_thread.queue(move |mut qobj| {
+                                                qobj.as_mut().set_is_syncing_contacts(false);
+                                                qobj.as_mut().set_contact_sync_status(QString::from(&err_msg));
+                                            });
+                                        }
+                                    }
                                 }
                                 UiCommand::RefreshDevices => {
                                     update_devices(&proxy, &qt_thread).await;
@@ -766,9 +835,18 @@ impl cxx_qt::Initialize for qobject::SipUiBridge {
                             if let Ok(args) = signal.args() {
                                 let call_id = args.call_id;
                                 let raw_caller = args.caller;
-                                let caller = sip_protocol::SipPartyInfo::parse(&raw_caller)
+                                let parsed = sip_protocol::SipPartyInfo::parse(&raw_caller)
                                     .map(|p| p.display_string)
                                     .unwrap_or(raw_caller);
+                                let caller = if let Ok(name) = proxy.resolve_caller_name(&parsed).await {
+                                    if !name.is_empty() {
+                                        format!("{} ({})", name, parsed)
+                                    } else {
+                                        parsed
+                                    }
+                                } else {
+                                    parsed
+                                };
                                 info!(call_id = %call_id, "Received D-Bus incoming_call");
 
                                 let cid_clone = call_id.clone();
@@ -803,6 +881,16 @@ impl cxx_qt::Initialize for qobject::SipUiBridge {
                                 }
                             }
                         }
+
+                        Some(_sig) = async {
+                            match contacts_changed_stream.as_mut() {
+                                Some(s) => s.next().await,
+                                None => futures::future::pending().await,
+                            }
+                        } => {
+                            info!("Received D-Bus contacts_changed signal from daemon");
+                            update_contacts(&proxy, &qt_thread, "").await;
+                        }
                     }
                 }
             });
@@ -821,6 +909,7 @@ async fn fetch_and_update_state(
     }
     update_active_call(proxy, qt_thread, tray_handle).await;
     update_history(proxy, qt_thread, tray_handle).await;
+    update_contacts(proxy, qt_thread, "").await;
     update_devices(proxy, qt_thread).await;
     update_reject_mode(proxy, qt_thread).await;
 }
@@ -1022,6 +1111,24 @@ async fn update_history(
     }
 }
 
+async fn update_contacts(
+    proxy: &PlasmaSipDaemonProxy<'_>,
+    qt_thread: &cxx_qt::CxxQtThread<qobject::SipUiBridge>,
+    query: &str,
+) {
+    let res = if query.trim().is_empty() {
+        proxy.list_contacts().await
+    } else {
+        proxy.search_contacts(query.trim()).await
+    };
+    if let Ok(contacts_json) = res {
+        let json_str = contacts_json;
+        let _ = qt_thread.queue(move |mut qobj| {
+            qobj.as_mut().set_contacts_json(QString::from(&json_str));
+        });
+    }
+}
+
 async fn update_devices(
     proxy: &PlasmaSipDaemonProxy<'_>,
     qt_thread: &cxx_qt::CxxQtThread<qobject::SipUiBridge>,
@@ -1143,6 +1250,24 @@ impl qobject::SipUiBridge {
         }
     }
 
+    pub fn refresh_contacts(self: Pin<&mut Self>) {
+        if let Some(ref tx) = self.rust().cmd_tx {
+            let _ = tx.send(UiCommand::RefreshContacts);
+        }
+    }
+
+    pub fn search_contacts(self: Pin<&mut Self>, query: QString) {
+        if let Some(ref tx) = self.rust().cmd_tx {
+            let _ = tx.send(UiCommand::SearchContacts(query.to_string()));
+        }
+    }
+
+    pub fn sync_phonebook(self: Pin<&mut Self>) {
+        if let Some(ref tx) = self.rust().cmd_tx {
+            let _ = tx.send(UiCommand::SyncPhonebook);
+        }
+    }
+
     pub fn refresh_devices(self: Pin<&mut Self>) {
         if let Some(ref tx) = self.rust().cmd_tx {
             let _ = tx.send(UiCommand::RefreshDevices);
@@ -1192,7 +1317,11 @@ impl qobject::SipUiBridge {
                 output_device_id: out_opt,
                 ringing_device_id: ring_opt,
                 silent_mode,
-                ringtone: if ringtone_str.is_empty() { "marimba".into() } else { ringtone_str },
+                ringtone: if ringtone_str.is_empty() {
+                    "marimba".into()
+                } else {
+                    ringtone_str
+                },
                 custom_ringtone_path: custom_opt,
                 ringer_volume: ringer_volume.clamp(0, 100) as u32,
             });

@@ -85,23 +85,23 @@ Kirigami.ApplicationWindow {
         if (Qt.application.arguments.indexOf("--test-launch") !== -1) {
             root.switchToPage(dialPadView);
             root.switchToPage(historyView);
-            root.switchToPage(accountsView);
-            root.switchToPage(audioSettingsView);
+            root.switchToPage(contactsView);
+            root.switchToPage(settingsView);
             root.switchToPage(dialPadView);
         }
     }
 
-    // Direct Access Bottom Navigation Bar (HIG Convergent Softphone Standard)
+    // Direct Access Bottom Navigation Bar (HIG Convergent Softphone Standard: 4 Tabs)
     footer: TabBar {
         id: navTabBar
         visible: sipBridge.active_call_state !== "Active" && sipBridge.active_call_state !== "Dialing" && sipBridge.active_call_state !== "Early" && sipBridge.active_call_state !== "Ringing" && sipBridge.active_call_state !== "Held"
         currentIndex: root.pageStack.currentItem === dialPadView ? 0 :
                       (root.pageStack.currentItem === historyView ? 1 :
-                       (root.pageStack.currentItem === accountsView ? 2 :
-                        (root.pageStack.currentItem === audioSettingsView ? 3 : 0)))
+                       (root.pageStack.currentItem === contactsView ? 2 :
+                        (root.pageStack.currentItem === settingsView ? 3 : 0)))
 
         TabButton {
-            text: qsTr("Dial Pad")
+            text: qsTr("Keypad")
             icon.name: "call-start"
             onClicked: root.switchToPage(dialPadView)
         }
@@ -114,19 +114,20 @@ Kirigami.ApplicationWindow {
             }
         }
         TabButton {
-            text: qsTr("Accounts")
-            icon.name: "network-server"
+            text: qsTr("Contacts")
+            icon.name: "address-book-new"
             onClicked: {
-                sipBridge.refresh_accounts();
-                root.switchToPage(accountsView);
+                sipBridge.refresh_contacts();
+                root.switchToPage(contactsView);
             }
         }
         TabButton {
-            text: qsTr("Audio")
-            icon.name: "audio-card"
+            text: qsTr("Settings")
+            icon.name: "settings-configure"
             onClicked: {
+                sipBridge.refresh_accounts();
                 sipBridge.refresh_devices();
-                root.switchToPage(audioSettingsView);
+                root.switchToPage(settingsView);
             }
         }
     }
@@ -146,15 +147,16 @@ Kirigami.ApplicationWindow {
     Shortcut {
         sequence: "Ctrl+3"
         onActivated: {
-            sipBridge.refresh_accounts();
-            root.switchToPage(accountsView);
+            sipBridge.refresh_contacts();
+            root.switchToPage(contactsView);
         }
     }
     Shortcut {
         sequence: "Ctrl+4"
         onActivated: {
+            sipBridge.refresh_accounts();
             sipBridge.refresh_devices();
-            root.switchToPage(audioSettingsView);
+            root.switchToPage(settingsView);
         }
     }
     Shortcut {
@@ -178,7 +180,7 @@ Kirigami.ApplicationWindow {
         }
         onOpenAccountsRequested: {
             sipBridge.refresh_accounts();
-            root.switchToPage(accountsView);
+            root.switchToPage(settingsView);
         }
     }
 
@@ -217,14 +219,21 @@ Kirigami.ApplicationWindow {
         }
     }
 
-    AccountWizardView {
-        id: accountsView
+    ContactsView {
+        id: contactsView
         visible: false
         bridge: sipBridge
+        onStartCallRequested: function(target) {
+            sipBridge.dial(target);
+        }
+        onPrefillRequested: function(target) {
+            dialPadView.prefillNumber(target);
+            root.switchToPage(dialPadView);
+        }
     }
 
-    AudioSettingsView {
-        id: audioSettingsView
+    SettingsView {
+        id: settingsView
         visible: false
         bridge: sipBridge
     }
