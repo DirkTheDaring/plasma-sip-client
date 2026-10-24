@@ -388,8 +388,14 @@ Kirigami.Page {
     Kirigami.OverlaySheet {
         id: callDetailSheet
         title: qsTr("Call Details")
+        parent: applicationWindow() ? applicationWindow().overlay : null
+        implicitHeight: Math.min(
+            parent ? parent.height - Kirigami.Units.gridUnit * 4 : 500,
+            callDetailLayout.implicitHeight + Kirigami.Units.gridUnit * 5
+        )
 
         ColumnLayout {
+            id: callDetailLayout
             spacing: Kirigami.Units.largeSpacing
             implicitWidth: Math.min(page.width - (Kirigami.Units.gridUnit * 2), Kirigami.Units.gridUnit * 22)
 
