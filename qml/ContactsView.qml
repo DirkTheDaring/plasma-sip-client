@@ -332,7 +332,7 @@ Kirigami.Page {
 
                             // Source badge
                             Rectangle {
-                                visible: modelData.source === "fritzbox"
+                                visible: modelData.source === "fritzbox" || modelData.source === "fritz_box"
                                 implicitHeight: 18
                                 implicitWidth: fbLabel.implicitWidth + 10
                                 radius: 9

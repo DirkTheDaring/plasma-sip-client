@@ -369,13 +369,14 @@ pub fn parse_fritzbox_phonebook_xml(xml: &str) -> Result<Vec<Contact>, Tr064Erro
             search_from = abs_start + end + contact_tag_close.len();
 
             let real_name = extract_tag_value(block, "realName").unwrap_or_default();
-            if real_name.trim().is_empty() {
+            let unescaped_name = unescape_xml_entities(real_name.trim());
+            if unescaped_name.trim().is_empty() {
                 continue;
             }
 
             let unique_id = extract_tag_value(block, "uniqueid");
             let mut contact = Contact::new(
-                real_name.trim(),
+                unescaped_name.trim(),
                 ContactSource::FritzBox,
                 unique_id.map(|s| format!("fb_{}", s)),
             );
@@ -437,6 +438,15 @@ fn parse_attr_value(tag_header: &str, attr: &str) -> Option<String> {
         }
     }
     None
+}
+
+fn unescape_xml_entities(s: &str) -> String {
+    s.replace("&amp;", "&")
+        .replace("&quot;", "\"")
+        .replace("&apos;", "'")
+        .replace("&#39;", "'")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
 }
 
 #[cfg(test)]
@@ -508,6 +518,14 @@ mod tests {
         assert_eq!(
             val.as_deref(),
             Some("http://192.168.178.1:49000/phonebook.xml?id=0")
+        );
+    }
+
+    #[test]
+    fn test_unescape_xml_entities() {
+        assert_eq!(
+            unescape_xml_entities("Tina &amp; Gerhard Piskol &quot;Special&quot;"),
+            "Tina & Gerhard Piskol \"Special\""
         );
     }
 }
